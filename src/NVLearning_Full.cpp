@@ -2,9 +2,10 @@
 // Name        : NVLearning_Full.cpp
 // Author      : Tong WANG
 // Email       : tong.wang@nus.edu.sg
-// Version     : v3.0 (2013-03-30)
+// Version     : v4.0 (2013-04-20)
 // Copyright   : ...
 // Description : general code for newsvendor with censored demand --- the Full-observation Model
+//               compile using Intel icc: icpc -std=c++11 -openmp -O3 -fast -o NVLearning_Full.exe NVLearning_Full.cpp
 //============================================================================
 
 //***********************************************************
@@ -135,9 +136,9 @@ int find_x_myopic(int fullObs_cumulativeTime, int fullObs_cumulativeQuantity)
 //int n: current period index
 //int x: current inventory level
 
-double G_FO(int n, int x, int fullObs_cumulativeTime, int fullObs_cumulativeQuantity);
+double G_F(int n, int x, int fullObs_cumulativeTime, int fullObs_cumulativeQuantity);
 
-double V_FO(int n, int fullObs_cumulativeTime, int fullObs_cumulativeQuantity)
+double V_F(int n, int fullObs_cumulativeTime, int fullObs_cumulativeQuantity)
 {
     double v_max;
     
@@ -160,7 +161,7 @@ double V_FO(int n, int fullObs_cumulativeTime, int fullObs_cumulativeQuantity)
             //no need to search for optimal inventory level x, the myopic inventory level is optimal
             int x_opt = find_x_myopic(fullObs_cumulativeTime, fullObs_cumulativeQuantity);
             
-            v_max = G_FO(n, x_opt, fullObs_cumulativeTime, fullObs_cumulativeQuantity);
+            v_max = G_F(n, x_opt, fullObs_cumulativeTime, fullObs_cumulativeQuantity);
 
             
             if (n==1)
@@ -182,7 +183,7 @@ double V_FO(int n, int fullObs_cumulativeTime, int fullObs_cumulativeQuantity)
 
 
 
-double G_FO(int n, int x, int fullObs_cumulativeTime, int fullObs_cumulativeQuantity)
+double G_F(int n, int x, int fullObs_cumulativeTime, int fullObs_cumulativeQuantity)
 {
 
     double r = alpha0 + fullObs_cumulativeQuantity;
@@ -197,7 +198,9 @@ double G_FO(int n, int x, int fullObs_cumulativeTime, int fullObs_cumulativeQuan
     
     #pragma omp parallel for schedule(dynamic) reduction(+:out1)
     for (int d=0; d<=d_up; d++)
-        out1 += ( price * min(d,x) + V_FO(n+1, fullObs_cumulativeTime + 1, fullObs_cumulativeQuantity + d) ) * NegBinomial(d, r, p);
+    {
+        out1 += ( price * min(d,x) + V_F(n+1, fullObs_cumulativeTime + 1, fullObs_cumulativeQuantity + d) ) * NegBinomial(d, r, p);
+    }
     
     
     return out1 - cost*x;
@@ -227,13 +230,13 @@ int main(void)
     cout << "Num of Procs: " << omp_get_num_procs() << endl;
     cout << "Max Num of Threads: " << omp_get_max_threads() << endl;
     cout << "Num of periods (N): " << N << endl;
-    cout << "r\tc\talpha\tbeta\tQ_F\tPi_F\tTime(ms)\tCPUTime" << endl;
+    cout << "r\tc\talpha\tbeta\tQ_F\tPi_F\tTime_F\tCPUTime_F" << endl;
         
     
     file << "Num of Procs: " << omp_get_num_procs() << endl;
     file << "Max Num of Threads: " << omp_get_max_threads() << endl;
     file << "Num of periods (N): " << N << endl;
-    file << "r\tc\talpha\tbeta\tQ_F\tPi_F\tTime(ms)\tCPUTime" << endl;
+    file << "r\tc\talpha\tbeta\tQ_F\tPi_F\tTime_F\tCPUTime_F" << endl;
     
     
     
@@ -261,7 +264,7 @@ int main(void)
         
             clock_t cpu_start = clock();
             auto startTime = chrono::system_clock::now();
-            V_FO(1, 0, 0);
+            V_F(1, 0, 0);
             clock_t cpu_end = clock();
             auto endTime = chrono::system_clock::now();
             

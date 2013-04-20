@@ -2,9 +2,10 @@
 // Name        : NVLearning_CheckpointB.cpp
 // Author      : Tong WANG
 // Email       : tong.wang@nus.edu.sg
-// Version     : v3.0 (2013-03-30)
+// Version     : v4.0 (2013-04-20)
 // Copyright   : ...
 // Description : general code for newsvendor with censored demand --- the Checkpoint-B heuristic
+//               compile using Intel icc: icpc -std=c++11 -openmp -O3 -fast -o NVLearning_CheckpointB.exe NVLearning_CheckpointB.cpp
 //============================================================================
 
 //***********************************************************
@@ -138,7 +139,7 @@ double Likelihood(multiset<tuple<int, int>> censoredObservations, double lambda)
 tuple<double, double, vector<double>> lambda_pdf_update(int fullObs_cumulativeTime, int fullObs_cumulativeQuantity, multiset<tuple<int, int>>  censoredObservations)
 {
     //initialize the output tuple
-    tuple<double, double, vector<double>> lambda;
+    tuple<double, double, vector<double>> lambda_tuple;
     
     //first try to search for existing $lambda$ in $lambda_map$, based on the key $allObservations$
     auto allObservations = make_tuple(fullObs_cumulativeTime, fullObs_cumulativeQuantity, censoredObservations);
@@ -152,7 +153,7 @@ tuple<double, double, vector<double>> lambda_pdf_update(int fullObs_cumulativeTi
     {
         //cout << "lambda\t" << "\t" << fullObs_cumulativeTime << "\t" << fullObs_cumulativeQuantity << "\t" << count << endl;
         #pragma omp critical (lambda_map)
-        {lambda = lambda_map[allObservations];}
+        {lambda_tuple = lambda_map[allObservations];}
     
     } else {
         
@@ -173,7 +174,7 @@ tuple<double, double, vector<double>> lambda_pdf_update(int fullObs_cumulativeTi
         double predictive=0;
         
         //calculate the kernel and predictive in Bayesian equation at the same time
-        #pragma omp parallel for schedule(static) reduction(+:predictive)
+        //#pragma omp parallel for schedule(static) reduction(+:predictive)
         for (int i=0; i<LAMBDA_STEP; i++)
         {
             double lambda = lambda_low + (i+0.5)*delta_lambda;
@@ -191,15 +192,15 @@ tuple<double, double, vector<double>> lambda_pdf_update(int fullObs_cumulativeTi
             lambda_pdf[i] = kernel[i]/predictive;
         
         //encapsule $lambda_low$, $delta_lambda$, and $pdf$ vector into the $lambda$ tuple
-        lambda = make_tuple(lambda_low, delta_lambda, lambda_pdf);
+        lambda_tuple = make_tuple(lambda_low, delta_lambda, lambda_pdf);
         
         //save the newly obtained $lambda$ into $lambda_map$
         #pragma omp critical (lambda_map)
-        {lambda_map.insert(make_pair(allObservations, lambda));}
+        {lambda_map.insert(make_pair(allObservations, lambda_tuple));}
         
     }
     
-    return lambda;
+    return lambda_tuple;
 }
 
 
@@ -254,7 +255,7 @@ tuple<vector<double>, vector<double>> observation_pdf_update(int x, int fullObs_
             {
                 double intg=0;
                 
-                #pragma omp parallel for schedule(static) reduction(+:intg)
+                //#pragma omp parallel for schedule(static) reduction(+:intg)
                 for (int i=0; i<LAMBDA_STEP; i++)
                 {
                     double lambda = lambda_low + (i+0.5) * delta_lambda;
@@ -284,12 +285,12 @@ tuple<vector<double>, vector<double>> observation_pdf_update(int x, int fullObs_
         } else {
             
             //load/update pdf of lambda based on historical observations
-            auto lambda = lambda_pdf_update(fullObs_cumulativeTime, fullObs_cumulativeQuantity, censoredObservations);
+            auto lambda_tuple = lambda_pdf_update(fullObs_cumulativeTime, fullObs_cumulativeQuantity, censoredObservations);
             
             //read lambda_low, delta_lambda, and the pdf vector from the $lambda$ tuple
-            double lambda_low = get<0>(lambda);
-            double delta_lambda = get<1>(lambda);
-            vector<double> lambda_pdf = get<2>(lambda);
+            double lambda_low = get<0>(lambda_tuple);
+            double delta_lambda = get<1>(lambda_tuple);
+            vector<double> lambda_pdf = get<2>(lambda_tuple);
             
             //initialize predictive probability distributions of different kind of observations, with given prior on Lambda ~ lambda_pdf[]
             //1. m=M, there is an exact observation, just calculate mixture of Poisson(lambda) and lambda_pdf[]
@@ -300,9 +301,11 @@ tuple<vector<double>, vector<double>> observation_pdf_update(int x, int fullObs_
             {
                 double intg = 0;
                 
-                #pragma omp parallel for schedule(static) reduction(+:intg)
+                //#pragma omp parallel for schedule(static) reduction(+:intg)
                 for (int i=0; i<LAMBDA_STEP; i++)
+                {
                     intg += Poisson(d, lambda_low + (i+0.5) * delta_lambda) * lambda_pdf[i];
+                }
                 intg *= delta_lambda;
                 
                 prob_d[d] = intg;
@@ -313,7 +316,7 @@ tuple<vector<double>, vector<double>> observation_pdf_update(int x, int fullObs_
             {
                 double intg=0;
                 
-                #pragma omp parallel for schedule(static) reduction(+:intg)
+                //#pragma omp parallel for schedule(static) reduction(+:intg)
                 for (int i=0; i<LAMBDA_STEP; i++)
                 {
                     double lambda = lambda_low + (i+0.5) * delta_lambda;
@@ -361,19 +364,21 @@ double L_prime(int x, int n, int fullObs_cumulativeTime, int fullObs_cumulativeQ
     } else {
         
         //load/update pdf of lambda based on historical observations
-        auto lambda = lambda_pdf_update(fullObs_cumulativeTime, fullObs_cumulativeQuantity, censoredObservations);
+        auto lambda_tuple = lambda_pdf_update(fullObs_cumulativeTime, fullObs_cumulativeQuantity, censoredObservations);
         
         //read lambda_low, delta_lambda, and the pdf vector from the $lambda$ tuple
-        double lambda_low = get<0>(lambda);
-        double delta_lambda = get<1>(lambda);
-        vector<double> lambda_pdf = get<2>(lambda);
+        double lambda_low = get<0>(lambda_tuple);
+        double delta_lambda = get<1>(lambda_tuple);
+        vector<double> lambda_pdf = get<2>(lambda_tuple);
         
         
         //with censored observations, lambda ~ $lambda_pdf[]$, d|lambda ~ Poisson(lambda)
-        #pragma omp parallel for collapse(2) schedule(static) reduction(+:Phi_x)
+        //#pragma omp parallel for collapse(2) schedule(static) reduction(+:Phi_x)
         for (int d=0; d<=x; d++)
             for (int i=0; i<LAMBDA_STEP; i++)
+            {
                 Phi_x += Poisson(d, lambda_low + (i+0.5) * delta_lambda) * lambda_pdf[i];
+            }
         
         Phi_x *= delta_lambda;
         
@@ -521,9 +526,11 @@ double G_CheckpointB(int n, int x, int fullObs_cumulativeTime, int fullObs_cumul
         double out1 = 0;
         
         //Case I.1: when there is no stockout in the current period...
-        #pragma omp parallel for schedule(dynamic) reduction(+:out1)
+        //#pragma omp parallel for schedule(dynamic) reduction(+:out1)
         for (int d=0; d<x; d++)
+        {
             out1 += ( price*d + V_CheckpointB(n+1, fullObs_cumulativeTime + 1, fullObs_cumulativeQuantity + d, censoredObservations) ) * prob_d[d];
+        }
         
         
         //Case I.2: stockout can happen after any checkpoint m=0, 1, 2, ..., M-1; so iterate over all these checkpoints
@@ -567,14 +574,14 @@ int main(void)
     cout << "Max Num of Threads: " << omp_get_max_threads() << endl;
     cout << "Num of periods (N): " << N << endl;
     cout << "Max Num of checkpoints (M): " << M_MAX << endl;
-    cout << "r\tc\talpha\tbeta\tM\tQ_B\tPi_B\tTime(ms)\tCPUTime" << endl;
+    cout << "r\tc\talpha\tbeta\tM\tQ_B\tPi_B\tTime_B\tCPUTime_B" << endl;
     
     
     file << "Num of Procs: " << omp_get_num_procs() << endl;
     file << "Max Num of Threads: " << omp_get_max_threads() << endl;
     file << "Num of periods (N): " << N << endl;
     file << "Max Num of checkpoints (M): " << M_MAX << endl;
-    file << "r\tc\talpha\tbeta\tM\tQ_B\tPi_B\tTime(ms)\tCPUTime" << endl;
+    file << "r\tc\talpha\tbeta\tM\tQ_B\tPi_B\tTime_B\tCPUTime_B" << endl;
     
     
     

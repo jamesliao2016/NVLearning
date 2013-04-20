@@ -1,10 +1,11 @@
 //============================================================================
-// Name        : NVLearning_Timing.cpp
+// Name        : NVLearning_Timing_myopic.cpp
 // Author      : Tong WANG
 // Email       : tong.wang@nus.edu.sg
-// Version     : v3.0 (2013-03-30)
+// Version     : v4.0 (2013-04-20)
 // Copyright   : ...
-// Description : general code for newsvendor with censored demand --- the Stock-out Timing (myopic) Model
+// Description : general code for newsvendor with censored demand --- the (myopic) Stock-out Timing Model
+//               compile using Intel icc: icpc -std=c++11 -openmp -O3 -fast -o NVLearning_Timing_myopic.exe NVLearning_Timing_myopic.cpp
 //============================================================================
 
 //***********************************************************
@@ -180,8 +181,8 @@ double V_T(int n, int fullObs_cumulativeTime, int fullObs_cumulativeQuantity)
             //evaluate low bound x_low
             v_max = G_T(n, x_low, fullObs_cumulativeTime, fullObs_cumulativeQuantity);
             
-            /********************
-             //comment out the following block for Myopic policies (skipping the search for opitmal inventory level, use myopic inventory level instead)
+/********************
+//comment out the following block for Myopic policies (skipping the search for opitmal inventory level, use myopic inventory level instead)
              //linear search from x_low onwards
              for (int x=x_low+1;;x++)
              {
@@ -195,7 +196,7 @@ double V_T(int n, int fullObs_cumulativeTime, int fullObs_cumulativeQuantity)
                  else
                      break;
              }
-             //*******************/
+//*******************/
 
             
             if (n==1)
@@ -250,9 +251,11 @@ double G_T(int n, int x, int fullObs_cumulativeTime, int fullObs_cumulativeQuant
         //case 1: no stockout happening
         double out1 = 0;
 
-        #pragma omp parallel for schedule(dynamic) reduction(+:out1)
+        //#pragma omp parallel for schedule(dynamic) reduction(+:out1)
         for (int d=0; d<x; d++)
+        {
             out1 += ( price * d + V_T(n+1, fullObs_cumulativeTime + T_STEP, fullObs_cumulativeQuantity + d) ) * NegBinomial(d, r, p);
+        }
         
         //case 2: stockout at sometime before the end of the period
         double out2 = 0;
@@ -260,7 +263,9 @@ double G_T(int n, int x, int fullObs_cumulativeTime, int fullObs_cumulativeQuant
         //take stepsize=2 to speed up the calculation of the integral
         #pragma omp parallel for schedule(dynamic) reduction(+:out2)
         for (int i=1;i<=T_STEP;i+=2)
+        {
             out2 += ( price * x + V_T(n+1, fullObs_cumulativeTime + i, fullObs_cumulativeQuantity + x) ) * InvBeta2((double)i/T_STEP, x, alpha_n, beta_n); //integral at ticks 1, 3, 5, ..., 999
+        }
         out2 *= 2.0/T_STEP; //dt = 2/T_STEP
 
         
@@ -291,13 +296,13 @@ int main(void)
     cout << "Num of Procs: " << omp_get_num_procs() << endl;
     cout << "Max Num of Threads: " << omp_get_max_threads() << endl;
     cout << "Num of periods (N): " << N << endl;
-    cout << "r\tc\talpha\tbeta\tQ_F\tPi_F\tTime(ms)\tCPUTime" << endl;
+    cout << "r\tc\talpha\tbeta\tQ_Tm\tPi_Tm\tTime_Tm\tCPUTime_Tm" << endl;
         
     
     file << "Num of Procs: " << omp_get_num_procs() << endl;
     file << "Max Num of Threads: " << omp_get_max_threads() << endl;
     file << "Num of periods (N): " << N << endl;
-    file << "r\tc\talpha\tbeta\tQ_F\tPi_F\tTime(ms)\tCPUTime" << endl;
+    file << "r\tc\talpha\tbeta\tQ_Tm\tPi_Tm\tTime_Tm\tCPUTime_Tm" << endl;
     
 
     
