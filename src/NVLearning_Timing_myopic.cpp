@@ -315,8 +315,8 @@ int main(void)
     beta0 = 1;
 
 
-    //for (lambda_mean=10; lambda_mean<=50; lambda_mean+=10)
-    //for (beta0=2; beta0>=0.05; beta0/=2)
+    for (lambda_mean=10; lambda_mean<=50; lambda_mean+=10)
+    for (beta0=2; beta0>=0.05; beta0/=2)
     {
         alpha0 = beta0*lambda_mean;
     
