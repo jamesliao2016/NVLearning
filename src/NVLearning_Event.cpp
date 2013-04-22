@@ -491,13 +491,13 @@ int main(void)
     cout << "Num of Procs: " << omp_get_num_procs() << endl;
     cout << "Max Num of Threads: " << omp_get_max_threads() << endl;
     cout << "Num of periods (N): " << N << endl;
-    cout << "r\tc\talpha\tbeta\tM\tQ_E\tPi_E\tTime_E\tCPUTime_E" << endl;
+    cout << "r\tc\talpha\tbeta\tQ_E\tPi_E\tTime_E\tCPUTime_E" << endl;
         
     
     file << "Num of Procs: " << omp_get_num_procs() << endl;
     file << "Max Num of Threads: " << omp_get_max_threads() << endl;
     file << "Num of periods (N): " << N << endl;
-    file << "r\tc\talpha\tbeta\tM\tQ_E\tPi_E\tTime_E\tCPUTime_E" << endl;
+    file << "r\tc\talpha\tbeta\tQ_E\tPi_E\tTime_E\tCPUTime_E" << endl;
     
 
     
