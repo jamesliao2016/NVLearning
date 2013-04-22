@@ -19,7 +19,7 @@
 #include <iomanip> //required by setprecision()
 #include <map>
 #include <tuple>
-#include <omp.h>
+//#include <omp.h>
 
 using namespace std;
 
@@ -148,12 +148,12 @@ double V_F(int n, int fullObs_cumulativeTime, int fullObs_cumulativeQuantity)
     {
         auto parameters = make_tuple(n, fullObs_cumulativeTime, fullObs_cumulativeQuantity);
         int count;
-        #pragma omp critical (v_map)
+        //#pragma omp critical (v_map)
         {count = v_map.count(parameters);}
 
         if (count==1)
         {
-            #pragma omp critical (v_map)
+            //#pragma omp critical (v_map)
             {v_max = v_map[parameters];}
         
         } else {
@@ -171,7 +171,7 @@ double V_F(int n, int fullObs_cumulativeTime, int fullObs_cumulativeQuantity)
             }
         
             
-            #pragma omp critical (v_map)
+            //#pragma omp critical (v_map)
             { v_map.insert(make_pair(parameters, v_max)); }
 
         }
@@ -196,7 +196,7 @@ double G_F(int n, int x, int fullObs_cumulativeTime, int fullObs_cumulativeQuant
     //start calculate expected profit-to-go
     double out1 = 0;
     
-    #pragma omp parallel for schedule(dynamic) reduction(+:out1)
+    //#pragma omp parallel for schedule(dynamic) reduction(+:out1)
     for (int d=0; d<=d_up; d++)
     {
         out1 += ( price * min(d,x) + V_F(n+1, fullObs_cumulativeTime + 1, fullObs_cumulativeQuantity + d) ) * NegBinomial(d, r, p);
@@ -225,16 +225,16 @@ int main(void)
     file << setprecision(10);
     cout << setprecision(10);
     
-    omp_set_num_threads(omp_get_num_procs());
+//    omp_set_num_threads(omp_get_num_procs());
 	
-    cout << "Num of Procs: " << omp_get_num_procs() << endl;
-    cout << "Max Num of Threads: " << omp_get_max_threads() << endl;
+//    cout << "Num of Procs: " << omp_get_num_procs() << endl;
+//    cout << "Max Num of Threads: " << omp_get_max_threads() << endl;
     cout << "Num of periods (N): " << N << endl;
     cout << "r\tc\talpha\tbeta\tQ_F\tPi_F\tTime_F\tCPUTime_F" << endl;
         
     
-    file << "Num of Procs: " << omp_get_num_procs() << endl;
-    file << "Max Num of Threads: " << omp_get_max_threads() << endl;
+//    file << "Num of Procs: " << omp_get_num_procs() << endl;
+//    file << "Max Num of Threads: " << omp_get_max_threads() << endl;
     file << "Num of periods (N): " << N << endl;
     file << "r\tc\talpha\tbeta\tQ_F\tPi_F\tTime_F\tCPUTime_F" << endl;
     
@@ -249,8 +249,8 @@ int main(void)
     beta0 = 1;
 
 
-    //for (lambda_mean=10; lambda_mean<=50; lambda_mean+=10)
-    //for (beta0=2; beta0>=0.05; beta0/=2)
+    for (lambda_mean=10; lambda_mean<=50; lambda_mean+=10)
+    for (beta0=2; beta0>=0.05; beta0/=2)
     {
         alpha0 = beta0*lambda_mean;
     
