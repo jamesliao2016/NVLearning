@@ -2,7 +2,7 @@
 // Name        : NVLearning_CheckpointB.cpp
 // Author      : Tong WANG
 // Email       : tong.wang@nus.edu.sg
-// Version     : v4.0 (2013-04-20)
+// Version     : v5.1 (2013-04-20) //added function to periodically save intermediate result in local files
 // Copyright   : ...
 // Description : general code for newsvendor with censored demand --- the Checkpoint-B heuristic
 //               compile using Intel icc: icpc -std=c++11 -openmp -O3 -fast -o NVLearning_CheckpointB.exe NVLearning_CheckpointB.cpp
@@ -21,6 +21,11 @@
 #include <map>
 #include <tuple>
 #include <vector>
+#include <boost/archive/text_iarchive.hpp>
+#include <boost/archive/text_oarchive.hpp>
+#include <boost/serialization/map.hpp>
+#include "serialize_tuple.h"
+#include <boost/serialization/set.hpp>
 #include <omp.h>
 
 using namespace std;
@@ -42,8 +47,16 @@ vector<double> tau;             //timepoint of each checkpoints
 
 double price, cost;             //Newsvendor price and cost parameters
 double alpha0, beta0;           //Initial prior of lambda is Gamma(alpha0, beta0)
+int lambda_mean;
 
 ofstream file;                  //output files
+
+string path;                                        //path to the temporary archive files
+string model;                                       //model name used in naming archive files
+string archiveFile;                                 //archive file name
+auto lastTime = chrono::system_clock::now();        //time point of last archiving
+auto currentTime= chrono::system_clock::now();      //current time, used when judging whether to archive
+
 
 map<tuple<int, int, multiset<tuple<int, int>> >, tuple<double, double, vector<double>>> lambda_map;                 //an std::map to store updated distributions of lambda
 map<tuple<int, int, int, multiset<tuple<int, int>> >, tuple<vector<double>, vector<double>> > observation_map;      //an std::map to store predictive distributions of observation
@@ -488,16 +501,34 @@ double V_CheckpointB(int n, int fullObs_cumulativeTime, int fullObs_cumulativeQu
              }
 //*******************/
             
-            if (n==1)
-            {
-                cout << x_opt << "\t" << v_max  << "\t";
-                file << x_opt << "\t" << v_max  << "\t";
-            }
             
             
             #pragma omp critical (v_map)
             {v_map.insert(make_pair(parameters, v_max));}
             
+ 
+            //save the whole v_map into $archiveFile$ every 30 minutes
+            currentTime = chrono::system_clock::now();  //get current time
+            
+            if (chrono::duration_cast<chrono::minutes> (currentTime-lastTime).count()>=30)
+            {
+                #pragma omp critical (archive)
+                {
+                    ofstream temp(archiveFile); //open the temporary archive file named $archiveFile$
+                    boost::archive::text_oarchive oa(temp); //initialize boost::archive::text_oarchive
+                    oa << v_map; //serialize v_map and save it to file
+                    temp.close();
+                }
+                
+                lastTime = currentTime; //update time of last archive
+            }
+            
+            
+            if (n==1)
+            {
+                cout << x_opt << "\t" << v_max  << "\t";
+                file << x_opt << "\t" << v_max  << "\t";
+            }
         }
         
     }
@@ -555,13 +586,17 @@ double G_CheckpointB(int n, int x, int fullObs_cumulativeTime, int fullObs_cumul
 
 int main(void)
 {
+    path  = ""; //default archive path is current folder
+    //path  = "/hpctmp/bizcaob/";
+    model = "NVLearning_CheckpointB";
+    
     //Open output file
-    file.open("NVLearning_CheckpointB.txt", fstream::app|fstream::out);
+    file.open(model + ".txt", fstream::app|fstream::out);
     
     if (! file)
     {
         //if fail to open the file
-        cerr << "can't open output file NVLearning_CheckpointB.txt!" << endl;
+        cerr << "can't open output file " << model << ".txt!" << endl;
         exit(EXIT_FAILURE);
     }
 	
@@ -587,11 +622,12 @@ int main(void)
     
     //initialize cost parameters
     price = 2;
-    cost = 1.0;
+    cost = 1;
     
     //initialize info parameters
-    int lambda_mean = 10;
+    lambda_mean = 10;
     beta0 = 1;
+    M=4;
     
     //initial observations are null
     multiset<tuple<int, int>> nullSet;
@@ -601,7 +637,7 @@ int main(void)
     {
         alpha0 = beta0*lambda_mean;
         
-        for (M=1; M<=M_MAX;M++)
+        //for (M=1; M<=M_MAX;M++)
         {
             //initialize the timepoint of the M checkpoints, assuming they are evenly spaced on the interval [0, 1]
             tau.clear();
@@ -613,9 +649,24 @@ int main(void)
             lambda_map.clear();
             observation_map.clear();
             
-            for (cost=1.8;cost>=0.15;cost-=0.1)
+            //for (cost=1.8;cost>=0.15;cost-=0.1)
             {
                 v_map.clear();
+
+                
+                //initialize the archive file name by taking all parameters
+                archiveFile = path + model + ".l" + to_string(lambda_mean) +".b" + to_string(int(beta0*10000)) + ".M" + to_string(M) + ".c" + to_string(int(cost*10)) + ".oarchive.txt";
+
+                std::ifstream ifs(archiveFile); //open archive file to read
+                if (ifs.good())
+                {
+                    boost::archive::text_iarchive ia(ifs); //initialize text_iarchive
+
+                    ia >> v_map; // restore v_map from the archive
+
+                    cout << "Read " << v_map.size() << " records from " << archiveFile << "!!!" << endl;
+                }
+
                 
                 
                 cout << price << "\t" << cost << "\t" << alpha0 << "\t" << beta0 << "\t" << M << "\t";
@@ -629,15 +680,16 @@ int main(void)
                 
                 cout << chrono::duration_cast<chrono::milliseconds> (endTime-startTime).count() << "\t" << 1000.0*(cpu_end-cpu_start)/CLOCKS_PER_SEC << endl;
                 file << chrono::duration_cast<chrono::milliseconds> (endTime-startTime).count() << "\t" << 1000.0*(cpu_end-cpu_start)/CLOCKS_PER_SEC << endl;
+            
+
             }
             
         }
         
     }
-    
-    
+
     file.close();
-    
+
     return 0;
 }
 
