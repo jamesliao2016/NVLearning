@@ -1,4 +1,3 @@
-Num of periods (N): 4
 r	c	alpha	beta	Q_F	Pi_F	Time_F	CPUTime_F
 2	1.8	20	2	5	3.456581602	16	16.485
 2	1.7	20	2	6	5.843137976	19	19.529

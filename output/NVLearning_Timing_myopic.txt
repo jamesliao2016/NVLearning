@@ -1,6 +1,3 @@
-Num of Procs: 4
-Max Num of Threads: 4
-Num of periods (N): 4
 r	c	alpha	beta	Q_Tm	Pi_Tm	Time_Tm	CPUTime_Tm
 2	1.8	20	2	5	3.376186382	7865	29944.478
 2	1.7	20	2	6	5.750741672	9742	36178.94
