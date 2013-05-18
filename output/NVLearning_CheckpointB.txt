@@ -1,8 +1,4 @@
-Num of Procs: 12
-Max Num of Threads: 12
-Num of periods (N): 4
-Max Num of checkpoints (M): 4
-r	c	alpha	beta	M	Q_B	Pi_B	Time(ms)
+r	c	alpha	beta	M	Q_B	Pi_B	Time_B	CPUTiming_B
 2	1.8	20	2	1	5	3.2848632	2145
 2	1.7	20	2	1	6	5.6316956	2293
 2	1.6	20	2	1	7	8.2606746	2409
