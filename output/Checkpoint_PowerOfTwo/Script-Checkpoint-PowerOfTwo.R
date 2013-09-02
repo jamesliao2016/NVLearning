@@ -11,14 +11,14 @@
   data_A <- read.table("NVLearning_CheckpointA_PowerOfTwo.txt", header=TRUE)[c("M", "Pi_A")]
   data_B <- read.table("NVLearning_CheckpointB_PowerOfTwo.txt", header=TRUE)[c("M", "Pi_B")]
 
-  Pi_E <- 27.450019
+  Pi_E <- 27.450026
   Pi_T <- 27.66852677
   Pi_F <- 27.80394629
   Pi_Tm <- 27.63839435
 
 #merge into one data frame
 data <- merge(data_A, data_B, by=c("M"))
-data <- data[data$M>1,]
+#data <- data[data$M>1,]
 
 #calculate profit gaps
 data$Gap_A <- (data$Pi_A - Pi_E) / (Pi_T - Pi_E) * 100
@@ -29,7 +29,8 @@ data$Gap_B <- (data$Pi_B - Pi_E) / (Pi_T - Pi_E) * 100
 pdf('Figure-Checkpoint-PowerOfTwo.pdf', width = 8, height = 8)
 
     xrange = range(log2(data$M))
-    yrange = c(50,100)
+#    yrange = c(50,100)
+    yrange = c(0,100)
 
     plot(xrange, yrange, type="n", xlab="Number of Checkpoints (M)", ylab="Profit Gap (%)", xaxt="n", yaxt="n")
     lines(log2(data$M), rep(100, length(data$M)), lty=5, lwd=1)
@@ -43,7 +44,8 @@ pdf('Figure-Checkpoint-PowerOfTwo.pdf', width = 8, height = 8)
     points(log2(data$M), data$Gap_B, pch=9)
     #text(x=1.5, y=57, "Checkpoint-b[M]")
     axis(side=1, at=log2(data$M), labels=data$M)
-    axis(side=2, at=seq(50, 100, 10), labels=seq(50, 100, 10))
+#    axis(side=2, at=seq(50, 100, 10), labels=seq(50, 100, 10), las=1)
+    axis(side=2, at=seq(0, 100, 10), labels=seq(0, 100, 10), las=1)
     legend(x="bottomright", inset=0, legend=c("Inventory Checkpoint [M]", "Stock-out Checkpoint [M]"), lty=c(1,1), lwd=c(1,1), pch=c(7,9), x.intersp=1.5, y.intersp=1.5)
 
 
