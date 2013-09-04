@@ -2,7 +2,7 @@
 // Name        : NVLearning_Timing.cpp
 // Author      : Tong WANG
 // Email       : tong.wang@nus.edu.sg
-// Version     : v8.0 (2013-08-15)
+// Version     : v8.0 (2013-09-03)
 // Copyright   : ...
 // Description : general code for newsvendor with censored demand --- the Stock-out Timing Model
 //============================================================================
@@ -41,7 +41,6 @@ using namespace std;
 #define T_STEP 1000                                 //discretize the [0,1] interval into 1000 segments
 
 #define D_UP_NUMBER_OF_STDEV_AWAY_FROM_THE_MEAN 10  //upper bound for D
-#define X_MYOPIC_UP_MULTIPLE_OF_MEAN 10             //upper bound for X
 
 //***********************************************************
 
@@ -55,14 +54,14 @@ ofstream file;                                      //output files
 string path, modelName, scenarioName;               //model name used in naming archive files
 string resultFile, archiveFile;                     //output and archive file names
 
-
 auto startTime = chrono::system_clock::now();       //time point of starting calculation
 auto endTime = chrono::system_clock::now();         //time point of finishing calculation
 auto lastTime = chrono::system_clock::now();        //time point of last archiving
 int lastMapSize;
 
-boost::unordered_map<tuple<int, int, int>, tuple<vector<double>, vector<double>> > observation_map;      //a boost::unordered_map to store predictive distributions of observation
-boost::unordered_map<tuple<int, int, int>, double> v_map;            //a boost::unordered_map to store calculated value of the V() function
+boost::unordered_map<tuple<int, int>, vector<double> > demand_map;             //a boost::unordered_map to store predictive distributions of demand
+boost::unordered_map<tuple<int, int, int>, vector<double> > observation_map;        //a boost::unordered_map to store predictive distributions of timing observations
+boost::unordered_map<tuple<int, int, int>, double> v_map;                           //a boost::unordered_map to store calculated value of the V() function
 
 
 //***********************************************************
@@ -118,18 +117,68 @@ double InvBeta2(const double& tt, const int& xx, const double& aa, const double&
 
 
 //***********************************************************
+//Bayesian updating implementation
+//Key variables:
+//  int fullObs_cumulativeTime: cumulative number of periods with effective observation
+//  int fullObs_cumulativeQuantity: cumulative demand quantity that was effectively observed (in terms of the number of sub-periods, for the sake of discreteness)
 
-//calculate the predictive distributions of current period observation
-tuple<vector<double>, vector<double>> observation_pdf_update(const int& x, const int& fullObs_cumulativeTime, const int& fullObs_cumulativeQuantity)
+//calculate the predictive distributions of current period demand
+vector<double> demand_pdf_update(const int& fullObs_cumulativeTime, const int& fullObs_cumulativeQuantity)
+{
+    //update alpha,beta based on the exact observations
+    double alpha_n = alpha0 + fullObs_cumulativeQuantity;
+    double beta_n = beta0 + double(fullObs_cumulativeTime)/T_STEP;
+    double p_n = 1/(1+beta_n);
+    
+    double d_mean = alpha_n*p_n/(1-p_n);
+    double d_var = alpha_n*p_n/pow(1-p_n,2.0);
+    int d_up = d_mean + D_UP_NUMBER_OF_STDEV_AWAY_FROM_THE_MEAN*sqrt(d_var);  //upper bound of D is set to be equal to $mean + N*var$
+    
+    //initialize the output vector
+    vector<double> demand_pdf (d_up+1);
+    
+    //first try to search for existing $demand_pdf$ in $demand_map$, based on the key $allObservations$
+    auto allObservations = make_tuple(fullObs_cumulativeTime, fullObs_cumulativeQuantity);
+    
+    bool found = false;
+#pragma omp critical (demand_map)
+    {
+        auto  it = demand_map.find(allObservations);
+        if (it != demand_map.end())
+        {
+            found = true;
+            demand_pdf = it->second;
+        }
+    }
+    
+    if (!found)
+    {
+        for (int d=0; d<d_up; ++d)
+            demand_pdf[d] = NegBinomial(d, alpha_n, p_n);
+        
+        
+        //save the newly calculated pdf into demand_map
+#pragma omp critical (demand_map)
+        {demand_map.emplace(allObservations, demand_pdf);}
+        
+        
+    }
+    
+    return demand_pdf;
+    
+}
+
+//calculate the predictive distributions of current period timing observation
+vector<double> observation_pdf_update(const int& x, const int& fullObs_cumulativeTime, const int& fullObs_cumulativeQuantity)
 {
     //initialize the output vector
-    tuple<vector<double>, vector<double>> observation_pdf;
+    vector<double> observation_pdf (T_STEP/2);
     
     //first try to search for existing $observation_pdf$ in $observations_map$, based on the key $allObservations$
     auto allObservations = make_tuple(x, fullObs_cumulativeTime, fullObs_cumulativeQuantity);
     
     bool found = false;
-    #pragma omp critical (observation_map)
+#pragma omp critical (observation_map)
     {
         auto  it = observation_map.find(allObservations);
         if (it != observation_map.end())
@@ -141,117 +190,72 @@ tuple<vector<double>, vector<double>> observation_pdf_update(const int& x, const
     
     if (!found)
     {
-    
-        //initialize the probability vectors to be saved in $observation_pdf$
-        vector<double> prob_t (T_STEP/2); //probability of observation stockout at time $t$
-        vector<double> prob_d (x); //probability of no stockout and observing demand $x$
         
-        //initialize predictive probability distributions of different kind of observations, with given prior on Lambda ~ Gamma(alpha_n, beta_n)
-        //1. no stockout, there is an exact observation, so the predictive just updates to NegBin(alpha_n, 1/(1+beta_n))
-        //2. stockout at time $t$, the probability of observing stockout at time $t$
+        //initialize predictive probability distributions of timing observations, with given prior on Lambda ~ Gamma(alpha_n, beta_n)
         
-        //update alpha,beta based on the exact observations
+        //update alpha,beta based on the effective observations
         double alpha_n = alpha0 + fullObs_cumulativeQuantity;
         double beta_n = beta0 + double(fullObs_cumulativeTime)/T_STEP;
-        double p_n = 1/(1+beta_n);
         
-        
-        //for 1. no stockout.
-        for (int d=0; d<x; ++d)
-            prob_d[d] = NegBinomial(d, alpha_n, p_n);
-        
-        
-        //for 2. 0<t<1
+        //the probability of observing stockout at time $t$ ($t$ is in [0,1], which is discretized into T_STEP points)
         for (int t=0; t<T_STEP/2; ++t)
-            prob_t[t] = InvBeta2((2.0*t+1)/T_STEP, x, alpha_n, beta_n);
+            observation_pdf[t] = InvBeta2((2.0*t+1)/T_STEP, x, alpha_n, beta_n);
         
-                 
-        ///////////////////////////////////////
-        /*
-         //test probability distributions
-         double sum=0;
-         
-         for (int d=0; d<x; ++d)
-            sum += prob_d[d];
-
-         for (int t=0; t<T_STEP/2; ++t)
-            sum += prob_t[t];
-         
-         printf("%f\t", sum);
-         //*/
-        //////////////////////////////////////
-
-        observation_pdf = make_tuple(prob_t, prob_d);
+        
         
         //save the newly calculated pdf into observation_map
-        #pragma omp critical (observation_map)
+#pragma omp critical (observation_map)
         {observation_map.emplace(allObservations, observation_pdf);}
         
     }
     
-
+    
     return observation_pdf;
     
 }
 
-//first-order difference of L := L(x+1) - L(x)
-double L_prime(const int& x, const int& fullObs_cumulativeTime, const int& fullObs_cumulativeQuantity)
-{
-    
-    double Phi_x = 0; //$Phi_x$ is for Prob{d <= x} with the given updated belief on lambda
-    
-    //lambda ~ Gamma(alpha_n, beta_n), and d ~ NegBin(alpha_n, p)
-    //update alpha,beta based on the exact observations
-    double alpha_n = alpha0 + fullObs_cumulativeQuantity;
-    double beta_n = beta0 + double(fullObs_cumulativeTime)/T_STEP;
-    double p_n = 1/(1+beta_n);
-    
-    
-    for (int d=0; d<=x; ++d)
-        Phi_x += NegBinomial(d, alpha_n, p_n);
-    
-    Phi_x = min(1.0, Phi_x); //prob should not go beyond 1
-	
-    return price * (1 - Phi_x) - cost;
 
-}
-
-
-//search for myopic inventory level with updated knowledge about lambda
+//search for myopic inventory level with updated distribution
 int find_x_myopic(const int& fullObs_cumulativeTime, const int& fullObs_cumulativeQuantity)
 {
-    //update alpha,beta based on the exact observations
-    double alpha_n = alpha0 + fullObs_cumulativeQuantity;
-    double beta_n = beta0 + double(fullObs_cumulativeTime)/T_STEP;
-
+    //load the predictive pdf of current period demand
+    vector<double> demand_pdf = demand_pdf_update(fullObs_cumulativeTime, fullObs_cumulativeQuantity);
+    int d_up = demand_pdf.size() - 1;
+    
     //bi-sectional search for x such that L_prime is zero
-
+    
     int x;
-    int x_up = (int) X_MYOPIC_UP_MULTIPLE_OF_MEAN * alpha_n / beta_n;
+    int x_up = d_up;
     int x_low = 0;
-        
+    
+    vector<double> demand_cdf (d_up+1);
+    demand_cdf[0] = demand_pdf[0];
+    for (int d=1; d<=d_up; ++d)
+        demand_cdf[d] = min(1.0, demand_cdf[d-1] + demand_pdf[d]);
+    
+    
     while (x_up - x_low > 3)
     {
         x = (x_up + x_low)/2;
         
-        double temp = L_prime(x, fullObs_cumulativeTime, fullObs_cumulativeQuantity);
+        double temp = price * (1 -  demand_cdf[x]) - cost;
         
         if (temp > 0)
             x_low = x+1;
         else
             x_up = x;
     }
-
+    
     for (x=x_low; x<=x_up; ++x)
     {
-        double temp = L_prime(x, fullObs_cumulativeTime, fullObs_cumulativeQuantity);
-
+        double temp = price * (1 -  demand_cdf[x]) - cost;
+        
         if (temp < 0)
             break;
     }
     
     return x;
-
+    
 }
 
 
@@ -305,7 +309,7 @@ double V_T(const int& n, const int& fullObs_cumulativeTime, const int& fullObs_c
         auto parameters = make_tuple(n, fullObs_cumulativeTime, fullObs_cumulativeQuantity);
         
         bool found = false;
-        #pragma omp critical (v_map)
+#pragma omp critical (v_map)
         {
             auto  it = v_map.find(parameters);
             if (it != v_map.end()) {
@@ -321,41 +325,41 @@ double V_T(const int& n, const int& fullObs_cumulativeTime, const int& fullObs_c
             //search for optimal inventory level x
             
             //initial the lower bound of x, use myopic inventory level as lower bound
-            int x_low = find_x_myopic(fullObs_cumulativeTime, fullObs_cumulativeQuantity);
-            int x_opt = x_low;
+            int x_myopic = find_x_myopic(fullObs_cumulativeTime, fullObs_cumulativeQuantity);
+            int x_opt = x_myopic;
+            int x = x_myopic;
             
             //evaluate low bound x_low
-            v_max = G_T(n, x_opt, fullObs_cumulativeTime, fullObs_cumulativeQuantity);
-            int x = x_low;
+            v_max = G_T(n, x_myopic, fullObs_cumulativeTime, fullObs_cumulativeQuantity);
             
             if (myopic == 0)
             {
-                 //linear search from x_low onwards
-                 for (x=x_low+1; ; ++x)
-                 {
-                     double temp = G_T(n, x, fullObs_cumulativeTime, fullObs_cumulativeQuantity);
-                 
-                     if (temp > v_max)
-                     {
-                         x_opt = x;
-                         v_max = temp;
-                     }
-                     
-                     if (temp >= G_T_UpperBound(n, x+1, fullObs_cumulativeTime, fullObs_cumulativeQuantity))
-                         break;
-                 }
+                //linear search from x_low onwards, until reaches the upper bound of x
+                for (x=x_myopic+1; ; ++x)
+                {
+                    double temp = G_T(n, x, fullObs_cumulativeTime, fullObs_cumulativeQuantity);
+                    
+                    if (temp > v_max)
+                    {
+                        x_opt = x;
+                        v_max = temp;
+                    }
+                    //else //if assume concavity, searching can stop once the first order condition is met, without checking the bound
+                    if (temp >= G_T_UpperBound(n, x+1, fullObs_cumulativeTime, fullObs_cumulativeQuantity))
+                        break;
+                }
             }
-
+            
             
             if (n > 1) //when n==1, do not save v_max into v_map, calculate it instead so that we will have the value of x_opt (optimal inventory level information is not store in v_map, so have to calculate here)
             {
-                #pragma omp critical (v_map)
+#pragma omp critical (v_map)
                 {v_map.emplace(parameters, v_max);}
             }
-
-
+            
+            
             //save the whole v_map into $archiveFile$ every hour
-            if (omp_get_thread_num() == 0) //#pragma omp master
+            if (omp_get_thread_num() == 0) //only Thread 0 is in charge of archiving
             {
                 auto currentTime = chrono::system_clock::now();  //get current time
                 
@@ -374,21 +378,19 @@ double V_T(const int& n, const int& fullObs_cumulativeTime, const int& fullObs_c
                     }
                 }
             }
-
+            
             
             if (n==1)
             {
-                cout << x << "\t";
-                file << x << "\t";
-                cout << x_opt << "\t" << v_max  << "\t";
-                file << x_opt << "\t" << v_max  << "\t";
+                cout << x << "\t" << x_opt << "\t" << v_max  << "\t";
+                file << x << "\t" << x_opt << "\t" << v_max  << "\t";
             }
-        
-
+            
+            
         }
-
+        
     }
-
+    
     return v_max;
 }
 
@@ -396,40 +398,39 @@ double V_T(const int& n, const int& fullObs_cumulativeTime, const int& fullObs_c
 
 double G_T(const int& n, const int& x, const int& fullObs_cumulativeTime, const int& fullObs_cumulativeQuantity)
 {
-
+    
     //if x==0, jump to next period without learning or updating the system state (because without keeping inventory, there will be no observation, no cost, and no revenue anyhow)
     if (x==0)
         return V_T(n+1, fullObs_cumulativeTime, fullObs_cumulativeQuantity);
     else
     {
-        //load the predictive pdf of current period observation
-        auto observation_pdf = observation_pdf_update(x, fullObs_cumulativeTime, fullObs_cumulativeQuantity);
-        auto prob_t = get<0>(observation_pdf);
-        auto prob_d = get<1>(observation_pdf);
-
-
+        //load the predictive pdf of current period demand and timing observations
+        vector<double> demand_pdf = demand_pdf_update(fullObs_cumulativeTime, fullObs_cumulativeQuantity);
+        vector<double> observation_pdf = observation_pdf_update(x, fullObs_cumulativeTime, fullObs_cumulativeQuantity);
+        
+        
         //start calculate expected profit-to-go
         
         //case 1: no stockout happening
         double out1 = 0;
-
+        
         //#pragma omp parallel for schedule(dynamic) reduction(+:out1)
         for (int d=0; d<x; ++d)
         {
-            out1 += ( price * d + V_T(n+1, fullObs_cumulativeTime + T_STEP, fullObs_cumulativeQuantity + d) ) * prob_d[d];
+            out1 += ( price * d + V_T(n+1, fullObs_cumulativeTime + T_STEP, fullObs_cumulativeQuantity + d) ) * demand_pdf[d];
         }
         
         //case 2: stockout at sometime before the end of the period
         double out2 = 0;
-
+        
         //take stepsize=2 to speed up the calculation of the integral
-        #pragma omp parallel for schedule(dynamic) reduction(+:out2)
+#pragma omp parallel for schedule(dynamic) reduction(+:out2)
         for (int i=1; i<=T_STEP; i+=2)
         {
-            out2 += ( price * x + V_T(n+1, fullObs_cumulativeTime + i, fullObs_cumulativeQuantity + x) ) * prob_t[i/2]; //integral at ticks 1, 3, 5, ..., 999
+            out2 += ( price * x + V_T(n+1, fullObs_cumulativeTime + i, fullObs_cumulativeQuantity + x) ) * observation_pdf[i/2]; //integral at ticks 1, 3, 5, ..., 999
         }
         out2 *= 2.0/T_STEP; //dt = 2/T_STEP
-
+        
         
         return out1 + out2 - cost*x;
     }
@@ -439,24 +440,18 @@ double G_T(const int& n, const int& x, const int& fullObs_cumulativeTime, const 
 double G_T_UpperBound(const int& n, const int& x, const int& fullObs_cumulativeTime, const int& fullObs_cumulativeQuantity)
 {
     
-    double alpha_n = alpha0 + fullObs_cumulativeQuantity;
-    double beta_n = beta0 + double(fullObs_cumulativeTime)/T_STEP;
-    double p = 1/(1+beta_n);
-    double r = alpha_n;
-    
-    double d_mean = r*p/(1-p);
-    double d_var = r*p/pow(1-p,2.0);
-    int d_up = d_mean + D_UP_NUMBER_OF_STDEV_AWAY_FROM_THE_MEAN*sqrt(d_var);  //upper bound of D is set to be equal to $mean + N*var$
+    //load the predictive pdf of current period demand
+    vector<double> demand_pdf = demand_pdf_update(fullObs_cumulativeTime, fullObs_cumulativeQuantity);
+    int d_up = demand_pdf.size() - 1;
     
     //start calculate expected profit-to-go
     double out1 = 0;
     
-    //#pragma omp parallel for schedule(dynamic) reduction(+:out1)
     for (int d=0; d<=d_up; ++d)
-        out1 += ( price * min(d, x) + V_T(n+1, fullObs_cumulativeTime + T_STEP, fullObs_cumulativeQuantity + d) ) * NegBinomial(d, r, p);
+        out1 += ( price * min(d, x) + V_T(n+1, fullObs_cumulativeTime + T_STEP, fullObs_cumulativeQuantity + d) ) * demand_pdf[d];
     
     
-    return out1- cost*x;
+    return out1 - cost*x;
     
 }
 
@@ -491,13 +486,13 @@ int main(int ac, char* av[])
         return 0;
     }
     
-
+    
     
     //initialize the file names by taking all parameters
     modelName = "NVLearning_Timing";
     if (myopic != 0) modelName = modelName + "_myopic";
     if (resultFile == "") resultFile = modelName + ".result.txt";
-   
+    
     
     //Open output file
     file.open(resultFile, fstream::app|fstream::out);
@@ -531,7 +526,7 @@ int main(int ac, char* av[])
         file << "r\tc\talpha\tbeta\tQ_T_bar\tQ_T\tPi_T\tTime_T\tCPUTime_T\tComp_T" << endl;
     else
         file << "r\tc\talpha\tbeta\tQ_Tm_bar\tQ_Tm\tPi_Tm\tTime_Tm\tCPUTime_Tm\tComp_Tm" << endl;
-
+    
     
     
     
@@ -541,41 +536,43 @@ int main(int ac, char* av[])
     //beta0 = 1;
     //cost = 1;
     
-
-
+    
+    
     //for (lambda_mean=10; lambda_mean<=50; lambda_mean+=10)
     for (beta0=2; beta0>=0.05; beta0/=2)
     {
         alpha0 = beta0*lambda_mean;
-    
+        
         for (cost=1.8; cost>=0.15; cost-=0.1)
         {
+            demand_map.clear();
             observation_map.clear();
             v_map.clear();
-
+            
             cout << price << "\t" << cost << "\t" << alpha0 << "\t" << beta0 << "\t";
             file << price << "\t" << cost << "\t" << alpha0 << "\t" << beta0 << "\t";
-
+            
             //try load archived data into v_map
             scenarioName = ".l" + dbl_to_str(lambda_mean) +".b" + dbl_to_str(beta0) + ".c" + dbl_to_str(cost);
             archiveFile = path + modelName + scenarioName + ".oarchive.txt";
             
             importVMap(v_map, archiveFile);
             lastMapSize = v_map.size();
-
-        
-            auto startTime = chrono::system_clock::now();
+            
+            
+            //start solving DP recursively
+            startTime = chrono::system_clock::now();
             lastTime = startTime;
             clock_t cpu_start = clock();
-
+            
             V_T(1, 0, 0);
             
             clock_t cpu_end = clock();
-            auto endTime = chrono::system_clock::now();
-        
+            endTime = chrono::system_clock::now();
+            
             cout << chrono::duration_cast<chrono::milliseconds> (endTime-startTime).count() << "\t" << 1000.0*(cpu_end-cpu_start)/CLOCKS_PER_SEC << "\t";
             file << chrono::duration_cast<chrono::milliseconds> (endTime-startTime).count() << "\t" << 1000.0*(cpu_end-cpu_start)/CLOCKS_PER_SEC << "\t";
-
+            
             
             //archive again upon finishing
             int mapSize = v_map.size();
@@ -583,14 +580,14 @@ int main(int ac, char* av[])
                 archiveVMap(v_map, archiveFile);
             cout << mapSize+1 << endl;
             file << mapSize+1 << endl;
-
+            
         }
         
     }
-
+    
     
     file.close();
-
+    
     return 0;
 }
 

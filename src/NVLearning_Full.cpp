@@ -2,7 +2,7 @@
 // Name        : NVLearning_Full.cpp
 // Author      : Tong WANG
 // Email       : tong.wang@nus.edu.sg
-// Version     : v7.2 (2013-07-16)
+// Version     : v8.0 (2013-09-03)
 // Copyright   : ...
 // Description : general code for newsvendor with censored demand --- the Full-observation Model
 //============================================================================
@@ -20,13 +20,11 @@
 #include <ctime>
 
 #include <tuple>
-//#include <map>
 #include <boost/unordered_map.hpp>
 
 
 #include <boost/archive/text_iarchive.hpp>
 #include <boost/archive/text_oarchive.hpp>
-//#include <boost/serialization/map.hpp>
 #include "serialize_tuple.h"
 #include "unordered_map_serialization.h"
 
@@ -300,8 +298,8 @@ int main(int ac, char* av[])
         exit(EXIT_FAILURE);
     }
 	
-    file << setprecision(8);
-    cout << setprecision(8);
+    file << setprecision(10);
+    cout << setprecision(10);
     
     //omp_set_num_threads(omp_get_num_procs());
 	
@@ -325,42 +323,42 @@ int main(int ac, char* av[])
     
     
     for (lambda_mean=10; lambda_mean<=50; lambda_mean+=10)
-        for (beta0=2; beta0>=0.05; beta0/=2)
+    for (beta0=2; beta0>=0.05; beta0/=2)
+    {
+        alpha0 = beta0*lambda_mean;
+        
+        for (cost=1.8; cost>=0.15; cost-=0.1)
         {
-            alpha0 = beta0*lambda_mean;
+            v_map.clear();
             
-            for (cost=1.8; cost>=0.15; cost-=0.1)
-            {
-                v_map.clear();
-                
-                
-                cout << price << "\t" << cost << "\t" << alpha0 << "\t" << beta0 << "\t";
-                file << price << "\t" << cost << "\t" << alpha0 << "\t" << beta0 << "\t";
-                
-                
-                auto startTime = chrono::system_clock::now();
-                clock_t cpu_start = clock();
-                
-                V_F(1, 0, 0);
-                
-                clock_t cpu_end = clock();
-                auto endTime = chrono::system_clock::now();
-                
-                cout << chrono::duration_cast<chrono::milliseconds> (endTime-startTime).count() << "\t" << 1000.0*(cpu_end-cpu_start)/CLOCKS_PER_SEC << "\t";
-                file << chrono::duration_cast<chrono::milliseconds> (endTime-startTime).count() << "\t" << 1000.0*(cpu_end-cpu_start)/CLOCKS_PER_SEC << "\t";
-                
-                
-                scenarioName = ".l" + dbl_to_str(lambda_mean) +".b" + dbl_to_str(beta0) + ".c" + dbl_to_str(cost);
-                archiveFile = path + modelName + scenarioName + ".oarchive.txt";
-                
-                archiveVMap(v_map, archiveFile);
-                auto mapSize = v_map.size();
-                cout << mapSize+1 << endl;
-                file << mapSize+1 << endl;
-            }
             
+            cout << price << "\t" << cost << "\t" << alpha0 << "\t" << beta0 << "\t";
+            file << price << "\t" << cost << "\t" << alpha0 << "\t" << beta0 << "\t";
+            
+            
+            auto startTime = chrono::system_clock::now();
+            clock_t cpu_start = clock();
+            
+            V_F(1, 0, 0);
+            
+            clock_t cpu_end = clock();
+            auto endTime = chrono::system_clock::now();
+            
+            cout << chrono::duration_cast<chrono::milliseconds> (endTime-startTime).count() << "\t" << 1000.0*(cpu_end-cpu_start)/CLOCKS_PER_SEC << "\t";
+            file << chrono::duration_cast<chrono::milliseconds> (endTime-startTime).count() << "\t" << 1000.0*(cpu_end-cpu_start)/CLOCKS_PER_SEC << "\t";
+            
+            
+            scenarioName = ".l" + dbl_to_str(lambda_mean) +".b" + dbl_to_str(beta0) + ".c" + dbl_to_str(cost);
+            archiveFile = path + modelName + scenarioName + ".oarchive.txt";
+            
+            archiveVMap(v_map, archiveFile);
+            auto mapSize = v_map.size();
+            cout << mapSize+1 << endl;
+            file << mapSize+1 << endl;
         }
-    
+        
+    }
+
     
     
     
