@@ -48,7 +48,7 @@ boxplot(log10(CPUTime) ~ Model, data=data.long, xlab="Model", ylab="CPU Time (mi
         boxlty=c(1, 1, 2,1, 2, 2, 2), boxfill=c("grey80", "grey80", "grey98","grey80", "grey98", "grey98", "grey98"), 
         medlty=c(1, 1, 2,1, 2, 2, 2), medlwd=c(1, 1, 1,1, 1, 1, 1),#medcol=c("grey40", "grey40", "grey70","grey40", "grey70","grey40", "grey70","grey40", "grey70","grey40"), 
         whisklty=c(1, 1, 2,1, 2, 2, 2), staplelty=c(1, 1, 2,1, 2, 2, 2) )
-axis(side=1, at=c(1, 3, 5, 7, 9, 11), labels=c("F","E","T","SC[2]m","SC[4]m", "IC[2]m"))
+axis(side=1, at=c(1, 3, 5, 7, 9, 11), labels=c("F","E","T","SC[2]","SC[4]", "IC[2]"))
 axis(side=2, at=seq(1, 10, 1), labels=parse(text=paste("10^", seq(1, 10, 1), sep="")), las=1)
 
 #boxplot(log10(CPUTime) ~ Model, data=data.long, xlab="Model", ylab="CPU Time (millisecond)", 

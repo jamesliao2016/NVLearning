@@ -32,14 +32,14 @@ pdf('Figure-Inventory-typical.pdf', width = 8, height = 8)
 
     plot(xrange1, yrange1, type="n", xlab="Newsvendor Ratio", ylab="Optimal Inventory Level", xaxt="n", yaxt="n")
     lines(data_typical$fractile, data_typical$Q_F, lty=2, lwd=1)
-    points(data_typical$fractile, data_typical$Q_F, pch=20)
+    points(data_typical$fractile, data_typical$Q_F, pch=8)
     lines(data_typical$fractile, data_typical$Q_E, lty=1, lwd=1)
-    points(data_typical$fractile, data_typical$Q_E, pch=1)
+    points(data_typical$fractile, data_typical$Q_E, pch=4)
     lines(data_typical$fractile, data_typical$Q_T, lty=1, lwd=1)
-    points(data_typical$fractile, data_typical$Q_T, pch=2)
+    points(data_typical$fractile, data_typical$Q_T, pch=19)
     axis(side=1, at=seq(0.1, 0.9, 0.1), labels=seq(0.1, 0.9, 0.1))
     axis(side=2, las=1)
-    legend(x="topleft", inset=0, legend=c(expression(y[1]^{E}), expression(y[1]^{T}), expression(y[1]^{F})), lty=c(1,1,2), lwd=c(1,1,1), pch=c(1,2,20), x.intersp=1.5, y.intersp=1.5)
+    legend(x="topleft", inset=0, legend=c(expression(y[1]^{E}), expression(y[1]^{T}), expression(y[1]^{F})), lty=c(1,1,2), lwd=c(1,1,1), pch=c(4,19,8), x.intersp=1.5, y.intersp=1.5, cex=1.2)
  
 dev.off()
 
@@ -81,9 +81,9 @@ plot(xrange2, yrange2, type="n", xlab="Newsvendor Ratio", ylab="Inventory Over-o
 polygon(xx_E, yy_E, col="grey90", border=NA)
 polygon(xx_T, yy_T, col="grey80", border=NA)
 lines(Q_Gap_agg_c$fractile, Q_Gap_agg_c$Gap_E50, lty=1, lwd=1)
-points(Q_Gap_agg_c$fractile, Q_Gap_agg_c$Gap_E50, pch=1)
+points(Q_Gap_agg_c$fractile, Q_Gap_agg_c$Gap_E50, pch=4)
 lines(Q_Gap_agg_c$fractile, Q_Gap_agg_c$Gap_T50, lty=1, lwd=1)
-points(Q_Gap_agg_c$fractile, Q_Gap_agg_c$Gap_T50, pch=2)
+points(Q_Gap_agg_c$fractile, Q_Gap_agg_c$Gap_T50, pch=19)
 axis(side=1, at=seq(0.1, 0.9, 0.1), labels=seq(0.1, 0.9, 0.1))
 axis(side=2, las=1)
 legend2(x="topright", inset=0,
@@ -91,9 +91,9 @@ legend2(x="topright", inset=0,
                 expression(paste("median of ", delta^T, sep="")), 
                 expression(paste("90% interval of ", delta^E, sep="")),  
                 expression(paste("90% interval of ", delta^T, sep=""))),  
-       lty=c(1,1,NA,NA), lwd=c(1,1,NA,NA), pch=c(1,2,NA,NA),
+       lty=c(1,1,NA,NA), lwd=c(1,1,NA,NA), pch=c(4,19,NA,NA),
        fill=c(NA, NA, "grey90", "gray80"), border=c(NA, NA, NA, NA), 
-       x.intersp=1.5, y.intersp=1.5)
+       x.intersp=1.5, y.intersp=1.5, cex=1.2)
 
 
 dev.off()
@@ -140,9 +140,9 @@ plot(xrange2, yrange2, type="n", xlab="Newsvendor Ratio", ylab="Increase in In-s
 polygon(xx_E, yy_E, col="grey90", border=NA)
 polygon(xx_T, yy_T, col="grey80", border=NA)
 lines(ServiceLevel_agg$fractile, ServiceLevel_agg$Gap_E_mean, lty=1, lwd=1)
-points(ServiceLevel_agg$fractile, ServiceLevel_agg$Gap_E_mean, pch=1)
+points(ServiceLevel_agg$fractile, ServiceLevel_agg$Gap_E_mean, pch=4)
 lines(ServiceLevel_agg$fractile, ServiceLevel_agg$Gap_T_mean, lty=1, lwd=1)
-points(ServiceLevel_agg$fractile, ServiceLevel_agg$Gap_T_mean, pch=2)
+points(ServiceLevel_agg$fractile, ServiceLevel_agg$Gap_T_mean, pch=19)
 axis(side=1, at=seq(0.1, 0.9, 0.1), labels=seq(0.1, 0.9, 0.1))
 axis(side=2, las=1)
 legend2(x="topright", inset=0,
@@ -150,9 +150,9 @@ legend2(x="topright", inset=0,
                  expression(paste("mean of ", delta^T, sep="")), 
                  expression(paste("90% quantile of ", delta^E, sep="")),  
                  expression(paste("90% quantile of ", delta^T, sep=""))),  
-        lty=c(1,1,NA,NA), lwd=c(1,1,NA,NA), pch=c(1,2,NA,NA),
+        lty=c(1,1,NA,NA), lwd=c(1,1,NA,NA), pch=c(4,19,NA,NA),
         fill=c(NA, NA, "grey90", "gray80"), border=c(NA, NA, NA, NA), 
-        x.intersp=1.5, y.intersp=1.5)
+        x.intersp=1.5, y.intersp=1.5, cex=1.2)
 
 
 dev.off()
