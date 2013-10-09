@@ -59,8 +59,8 @@ auto endTime = chrono::system_clock::now();         //time point of finishing ca
 auto lastTime = chrono::system_clock::now();        //time point of last archiving
 int lastMapSize;
 
-boost::unordered_map<tuple<int, int>, vector<double> > demand_map;             //a boost::unordered_map to store predictive distributions of demand
-boost::unordered_map<tuple<int, int, int>, vector<double> > observation_map;        //a boost::unordered_map to store predictive distributions of timing observations
+//boost::unordered_map<tuple<int, int>, vector<double> > demand_map;             //a boost::unordered_map to store predictive distributions of demand
+//boost::unordered_map<tuple<int, int, int>, vector<double> > observation_map;        //a boost::unordered_map to store predictive distributions of timing observations
 boost::unordered_map<tuple<int, int, int>, double> v_map;                           //a boost::unordered_map to store calculated value of the V() function
 
 
@@ -137,33 +137,33 @@ vector<double> demand_pdf_update(const int& fullObs_cumulativeTime, const int& f
     //initialize the output vector
     vector<double> demand_pdf (d_up+1);
     
-    //first try to search for existing $demand_pdf$ in $demand_map$, based on the key $allObservations$
-    auto allObservations = make_tuple(fullObs_cumulativeTime, fullObs_cumulativeQuantity);
-    
-    bool found = false;
-#pragma omp critical (demand_map)
-    {
-        auto  it = demand_map.find(allObservations);
-        if (it != demand_map.end())
-        {
-            found = true;
-            demand_pdf = it->second;
-        }
-    }
-    
-    if (!found)
-    {
+//    //first try to search for existing $demand_pdf$ in $demand_map$, based on the key $allObservations$
+//    auto allObservations = make_tuple(fullObs_cumulativeTime, fullObs_cumulativeQuantity);
+//    
+//    bool found = false;
+//#pragma omp critical (demand_map)
+//    {
+//        auto  it = demand_map.find(allObservations);
+//        if (it != demand_map.end())
+//        {
+//            found = true;
+//            demand_pdf = it->second;
+//        }
+//    }
+//    
+//    if (!found)
+//    {
         for (int d=0; d<d_up; ++d)
             demand_pdf[d] = NegBinomial(d, alpha_n, p_n);
         
-        
-        //save the newly calculated pdf into demand_map
-#pragma omp critical (demand_map)
-        {demand_map.emplace(allObservations, demand_pdf);}
-        
-        
-    }
-    
+//        
+//        //save the newly calculated pdf into demand_map
+//#pragma omp critical (demand_map)
+//        {demand_map.emplace(allObservations, demand_pdf);}
+//        
+//        
+//    }
+//    
     return demand_pdf;
     
 }
@@ -174,23 +174,23 @@ vector<double> observation_pdf_update(const int& x, const int& fullObs_cumulativ
     //initialize the output vector
     vector<double> observation_pdf (T_STEP/2);
     
-    //first try to search for existing $observation_pdf$ in $observations_map$, based on the key $allObservations$
-    auto allObservations = make_tuple(x, fullObs_cumulativeTime, fullObs_cumulativeQuantity);
-    
-    bool found = false;
-#pragma omp critical (observation_map)
-    {
-        auto  it = observation_map.find(allObservations);
-        if (it != observation_map.end())
-        {
-            found = true;
-            observation_pdf = it->second;
-        }
-    }
-    
-    if (!found)
-    {
-        
+//    //first try to search for existing $observation_pdf$ in $observations_map$, based on the key $allObservations$
+//    auto allObservations = make_tuple(x, fullObs_cumulativeTime, fullObs_cumulativeQuantity);
+//    
+//    bool found = false;
+//#pragma omp critical (observation_map)
+//    {
+//        auto  it = observation_map.find(allObservations);
+//        if (it != observation_map.end())
+//        {
+//            found = true;
+//            observation_pdf = it->second;
+//        }
+//    }
+//    
+//    if (!found)
+//    {
+//        
         //initialize predictive probability distributions of timing observations, with given prior on Lambda ~ Gamma(alpha_n, beta_n)
         
         //update alpha,beta based on the effective observations
@@ -201,14 +201,14 @@ vector<double> observation_pdf_update(const int& x, const int& fullObs_cumulativ
         for (int t=0; t<T_STEP/2; ++t)
             observation_pdf[t] = InvBeta2((2.0*t+1)/T_STEP, x, alpha_n, beta_n);
         
-        
-        
-        //save the newly calculated pdf into observation_map
-#pragma omp critical (observation_map)
-        {observation_map.emplace(allObservations, observation_pdf);}
-        
-    }
-    
+//        
+//        
+//        //save the newly calculated pdf into observation_map
+//#pragma omp critical (observation_map)
+//        {observation_map.emplace(allObservations, observation_pdf);}
+//        
+//    }
+//    
     
     return observation_pdf;
     
@@ -545,8 +545,8 @@ int main(int ac, char* av[])
         
         for (cost=1.8; cost>=0.15; cost-=0.1)
         {
-            demand_map.clear();
-            observation_map.clear();
+            //demand_map.clear();
+            //observation_map.clear();
             v_map.clear();
             
             cout << price << "\t" << cost << "\t" << alpha0 << "\t" << beta0 << "\t";
