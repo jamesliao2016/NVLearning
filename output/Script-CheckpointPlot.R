@@ -21,8 +21,8 @@ data_B4m <- read.table("NVLearning_CheckpointB_myopic_M4.txt", header=TRUE)[c("c
 
 #data_A2 <- read.table("NVLearning_CheckpointA_M2.txt", header=TRUE)[c("c", "alpha", "beta", "Q_A2", "Pi_A2")]
 data_A2m <- read.table("NVLearning_CheckpointA_myopic_M2.txt", header=TRUE)[c("c", "alpha", "beta", "Q_A2m", "Pi_A2m")]
-
 #data_A3m <- read.table("NVLearning_CheckpointA_myopic_M3.txt", header=TRUE)[c("c", "alpha", "beta", "Q_A3m", "Pi_A3m")]
+data_A4m <- read.table("NVLearning_CheckpointA_myopic_M4.txt", header=TRUE)[c("c", "alpha", "beta", "Q_A4m", "Pi_A4m")]
 
 #merge into one data frame
 data <- merge(data_F, data_E, by=c("c", "alpha", "beta"))
@@ -34,8 +34,9 @@ data <- merge(data, data_B2m, by=c("c", "alpha", "beta"))
 data <- merge(data, data_B4m, by=c("c", "alpha", "beta"))
 #data <- merge(data, data_A2, by=c("c", "alpha", "beta"))
 data <- merge(data, data_A2m, by=c("c", "alpha", "beta"))
-
 #data <- merge(data, data_A3m, by=c("c", "alpha", "beta"))
+data <- merge(data, data_A4m, by=c("c", "alpha", "beta"))
+
 
 
 
@@ -52,8 +53,8 @@ Profit_Gap$Gap_B2m <- (data$Pi_B2m - data$Pi_E) / (data$Pi_F - data$Pi_E) * 100
 Profit_Gap$Gap_B4m <- (data$Pi_B4m - data$Pi_E) / (data$Pi_F - data$Pi_E) * 100
 #Profit_Gap$Gap_A2 <- (data$Pi_A2 - data$Pi_E) / (data$Pi_F - data$Pi_E) * 100
 Profit_Gap$Gap_A2m <- (data$Pi_A2m - data$Pi_E) / (data$Pi_F - data$Pi_E) * 100
-
 #Profit_Gap$Gap_A3m <- (data$Pi_A3m - data$Pi_E) / (data$Pi_F - data$Pi_E) * 100
+Profit_Gap$Gap_A4m <- (data$Pi_A4m - data$Pi_E) / (data$Pi_F - data$Pi_E) * 100
 
 
 #figure 5: aggreage profit gaps
@@ -90,8 +91,8 @@ pdf('Figure-Profit-checkpoint.pdf', width = 8, height = 8)
 
 
     #lines(Profit_Gap_agg_c$fractile, Profit_Gap_agg_c$Gap_A4, lty=1, lwd=2)
-    #lines(Profit_Gap_agg_c$fractile, Profit_Gap_agg_c$Gap_A4m, lty=2, lwd=1)
-    #points(Profit_Gap_agg_c$fractile, Profit_Gap_agg_c$Gap_A4m, pch=15)
+    lines(Profit_Gap_agg_c$fractile, Profit_Gap_agg_c$Gap_A4m, lty=2, lwd=1)
+    points(Profit_Gap_agg_c$fractile, Profit_Gap_agg_c$Gap_A4m, pch=15)
     #text(x=0.28, y=48, expression(hat(eta)^"IC[4]"), cex=1.5)
 
     #lines(Profit_Gap_agg_c$fractile, Profit_Gap_agg_c$Gap_A2, lty=1, lwd=2)
@@ -107,8 +108,8 @@ pdf('Figure-Profit-checkpoint.pdf', width = 8, height = 8)
 legend(x="topright", inset=0.04, ncol=3,
        legend=c( expression(eta^T), expression(hat(eta)^T), 
                  expression(hat(eta)^"SC[4]"), expression(hat(eta)^"SC[2]"), 
-                 NA, expression(hat(eta)^"IC[2]")), 
-       lty=c(1,2,2,2,NA,2), lwd=c(1,1,1,1,NA,1), pch=c(19,1,17,2,NA,0), x.intersp=1.3, y.intersp=1.3, cex=1.2)
+                 expression(hat(eta)^"IC[4]"), expression(hat(eta)^"IC[2]")), 
+       lty=c(1,2,2,2,2,2), lwd=c(1,1,1,1,1,1), pch=c(19,1,17,2,15,0), x.intersp=1.3, y.intersp=1.3, cex=1.2)
 
 dev.off()
 
