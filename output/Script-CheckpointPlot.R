@@ -1,6 +1,6 @@
 #################
 # R code for analyzing output and plot figures
-# v2.0 (organized on 2013-11-11)
+# v3.0 (organized on 2014-05-02) for revision 2
 # for Figure 5b (profit comparison of the checkpoint models) in the paper
 # published on https://github.com/tong-wang/NVLearning
 #################
@@ -72,21 +72,21 @@ pdf('Figure-Profit-checkpoint.pdf', width = 8, height = 8)
     plot(xrange5, yrange5, type="n", xlab="Newsvendor Ratio", ylab="Loss Recovery (%)", xaxt="n", yaxt="n")
     
     #F model as upper bound
-    lines(Profit_Gap_agg_c$fractile, Profit_Gap_agg_c$Gap_F, lty=5, lwd=0.5)
-    text(x=0.27, y=98, "Full")
+    lines(Profit_Gap_agg_c$fractile, Profit_Gap_agg_c$Gap_F, lty=5, lwd=0.5, col="grey10")
+    text(x=0.27, y=98, "Full", col="grey50")
     
     #E model as lower bound
-    lines(Profit_Gap_agg_c$fractile, Profit_Gap_agg_c$Gap_E, lty=5, lwd=0.5)
-    text(x=0.27, y=2, "Event")
+    lines(Profit_Gap_agg_c$fractile, Profit_Gap_agg_c$Gap_E, lty=5, lwd=0.5, col="grey10")
+    text(x=0.27, y=2, "Event", col="grey50")
     
     #T model
-    lines(Profit_Gap_agg_c$fractile, Profit_Gap_agg_c$Gap_T, lty=1, lwd=1)
-    points(Profit_Gap_agg_c$fractile, Profit_Gap_agg_c$Gap_T, pch=19)
+    lines(Profit_Gap_agg_c$fractile, Profit_Gap_agg_c$Gap_T, lty=1, lwd=1, col="grey50")
+    points(Profit_Gap_agg_c$fractile, Profit_Gap_agg_c$Gap_T, pch=19, col="grey50")
     #text(x=0.27, y=78, expression(eta^T), cex=1.5)
     
     #Tm model
-    lines(Profit_Gap_agg_c$fractile, Profit_Gap_agg_c$Gap_Tm, lty=2, lwd=1)
-    points(Profit_Gap_agg_c$fractile, Profit_Gap_agg_c$Gap_Tm, pch=1)
+    lines(Profit_Gap_agg_c$fractile, Profit_Gap_agg_c$Gap_Tm, lty=2, lwd=1, col="grey50")
+    points(Profit_Gap_agg_c$fractile, Profit_Gap_agg_c$Gap_Tm, pch=1, col="grey50")
     #text(x=0.27, y=70, expression(hat(eta)^T), cex=1.5)
 
     #SC[4]m model
@@ -118,11 +118,11 @@ pdf('Figure-Profit-checkpoint.pdf', width = 8, height = 8)
     axis(side=1, at=seq(0.1, 0.9, 0.1), labels=seq(0.1, 0.9, 0.1))
     axis(side=2, at=seq(0, 100, 10), labels=seq(0, 100, 10), las=1)
 
-    legend(x="topright", inset=0.04, ncol=3,
+    legend(x="topright", inset=0, bg="white", ncol=3,
         legend=c(expression(eta^T), expression(hat(eta)^T), 
                 expression(hat(eta)^"SC[4]"), expression(hat(eta)^"SC[2]"), 
                 expression(hat(eta)^"IC[4]"), expression(hat(eta)^"IC[2]")), 
-        lty=c(1,2,2,2,2,2), lwd=c(1,1,1,1,1,1), pch=c(19,1,17,2,15,0), x.intersp=1.3, y.intersp=1.3, cex=1.2)
+        lty=c(1,2,2,2,2,2), lwd=c(1,1,1,1,1,1), pch=c(19,1,17,2,15,0), col=c("grey50","grey50","black","black","black","black"), x.intersp=1.3, y.intersp=1.3, cex=1.2)
 
 dev.off()
 

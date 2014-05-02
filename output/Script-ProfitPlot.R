@@ -1,6 +1,6 @@
 #################
 # R code for analyzing output and plot figures
-# v2.0 (organized on 2013-11-11)
+# v3.0 (organized on 2014-05-02) for revision 2
 # for Figure 4 (plot of profits of E, T, and F models) in the paper
 # published on https://github.com/tong-wang/NVLearning
 #################
@@ -37,21 +37,21 @@ pdf('Figure-Profit-typical.pdf', width = 8, height = 8)
     plot(xrange3, yrange3, type="n", xlab="Newsvendor Ratio", ylab="Optimal Profit", xaxt="n", yaxt="n")
     
     #F model
-    lines(data_typical$fractile, data_typical$Pi_F, lty=2, lwd=1)
-    points(data_typical$fractile, data_typical$Pi_F, pch=8)
+    lines(data_typical$fractile, data_typical$Pi_F, lty=1, lwd=1, col="grey10")
+    points(data_typical$fractile, data_typical$Pi_F, pch=8, col="grey10")
     
     #E model
-    lines(data_typical$fractile, data_typical$Pi_E, lty=1, lwd=1)
-    points(data_typical$fractile, data_typical$Pi_E, pch=4)
+    lines(data_typical$fractile, data_typical$Pi_E, lty=1, lwd=1, col="grey10")
+    points(data_typical$fractile, data_typical$Pi_E, pch=4, col="grey10")
     
     #T odel
-    lines(data_typical$fractile, data_typical$Pi_T, lty=1, lwd=1)
+    lines(data_typical$fractile, data_typical$Pi_T, lty=1, lwd=2)
     points(data_typical$fractile, data_typical$Pi_T, pch=19)
     
     axis(side=1, at=seq(0.1, 0.9, 0.1), labels=seq(0.1, 0.9, 0.1))
     axis(side=2, las=1)
     
-    legend(x="topleft", inset=0, legend=c(expression(V[1]^{E}), expression(V[1]^{T}), expression(V[1]^{F})), lty=c(1,1,2), lwd=c(1,1,1), pch=c(4,19,8), x.intersp=1.5, y.intersp=1.5, cex=1.2)
+    legend(x="topleft", inset=0, legend=c(expression(V[1]^{E}), expression(V[1]^{T}), expression(V[1]^{F})), lty=c(1,1,1), lwd=c(1,2,1), pch=c(4,19,8), col=c("grey10", "black", "grey10"), x.intersp=1.5, y.intersp=1.5, cex=1.2)
 
 dev.off()
 
@@ -107,12 +107,12 @@ pdf('Figure-Profit-aggregate.pdf', width = 8, height = 8)
     plot(xrange4, yrange4, type="n", xlab="Newsvendor Ratio", ylab="Loss Recovery (%)", xaxt="n", yaxt="n")
     
     #F model as upper bound (100%)
-    lines(Profit_Gap_agg_c$fractile, rep(100, length(Profit_Gap_agg_c$fractile)), lty=5, lwd=0.5)
-    text(x=0.25, y=97, "Full")
+    lines(Profit_Gap_agg_c$fractile, rep(100, length(Profit_Gap_agg_c$fractile)), lty=5, lwd=0.5, col="grey10")
+    text(x=0.25, y=98, "Full", col="grey50")
     
     #E model as lower bound (0%)
-    lines(Profit_Gap_agg_c$fractile, rep(0, length(Profit_Gap_agg_c$fractile)), lty=5, lwd=0.5)
-    text(x=0.25, y=3, "Event")
+    lines(Profit_Gap_agg_c$fractile, rep(0, length(Profit_Gap_agg_c$fractile)), lty=5, lwd=0.5, col="grey10")
+    text(x=0.25, y=2, "Event", col="grey50")
     
     #90% inverval of T model
     polygon(xx, yy90, col="grey90", border=NA)
@@ -121,7 +121,7 @@ pdf('Figure-Profit-aggregate.pdf', width = 8, height = 8)
     polygon(xx, yy50, col="grey80", border=NA)
     
     #mean of T model
-    lines(Profit_Gap_agg_c$fractile, Profit_Gap_agg_c$Gap_T_mean, lty=1, lwd=1)
+    lines(Profit_Gap_agg_c$fractile, Profit_Gap_agg_c$Gap_T_mean, lty=1, lwd=2)
     points(Profit_Gap_agg_c$fractile, Profit_Gap_agg_c$Gap_T_mean, pch=19)
     #text(x=0.25, y=78, "Timing")
     
@@ -132,12 +132,12 @@ pdf('Figure-Profit-aggregate.pdf', width = 8, height = 8)
     axis(side=1, at=seq(0.1, 0.9, 0.1), labels=seq(0.1, 0.9, 0.1))
     axis(side=2, at=seq(0, 100, 10), labels=seq(0, 100, 10), las=1)
     
-    legend2(x="bottomright", inset=0.04,
+    legend2(x="bottomright", inset=0, bg="white",
         legend=c(expression(paste("mean of ", eta^T, sep="")), 
                  expression(paste("mean of ", hat(eta)^T, sep="")), 
                  expression(paste("50% interval of ", eta^T, sep="")),
                  expression(paste("90% interval of ", eta^T, sep=""))),  
-        lty=c(1,2,NA,NA), lwd=c(1,1,NA,NA), pch=c(19,1,NA,NA),
+        lty=c(1,2,NA,NA), lwd=c(2,1,NA,NA), pch=c(19,1,NA,NA),
         fill=c(NA, NA, "grey80", "grey90"), border=c(NA,NA,NA,NA), 
         x.intersp=1.5, y.intersp=1.5, cex=1.2)
 

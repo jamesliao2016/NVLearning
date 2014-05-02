@@ -1,6 +1,6 @@
 #################
 # R code for analyzing output and plot figures
-# v2.0 (organized on 2013-11-11)
+# v3.0 (organized on 2014-05-02) for revision 2
 # for Figure A.1b in the paper
 # published on https://github.com/tong-wang/NVLearning
 #################

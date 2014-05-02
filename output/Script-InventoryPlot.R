@@ -1,6 +1,6 @@
 #################
 # R code for analyzing output and plot figures
-# v2.0 (organized on 2013-11-11)
+# v3.0 (organized on 2014-05-02) for revision 2
 # for Figure 3 (plot of optimal inventory levels) in the paper
 # published on https://github.com/tong-wang/NVLearning
 #################
@@ -38,21 +38,21 @@ pdf('Figure-Inventory-typical.pdf', width = 8, height = 8)
     plot(xrange1, yrange1, type="n", xlab="Newsvendor Ratio", ylab="Optimal Inventory Level", xaxt="n", yaxt="n")
     
     #F model
-    lines(data_typical$fractile, data_typical$Q_F, lty=2, lwd=1)
-    points(data_typical$fractile, data_typical$Q_F, pch=8)
+    lines(data_typical$fractile, data_typical$Q_F, lty=1, lwd=1, col="grey10")
+    points(data_typical$fractile, data_typical$Q_F, pch=8, col="grey10")
     
     #E model
-    lines(data_typical$fractile, data_typical$Q_E, lty=1, lwd=1)
-    points(data_typical$fractile, data_typical$Q_E, pch=4)
+    lines(data_typical$fractile, data_typical$Q_E, lty=1, lwd=1, col="grey10")
+    points(data_typical$fractile, data_typical$Q_E, pch=4, col="grey10")
     
     #T model
-    lines(data_typical$fractile, data_typical$Q_T, lty=1, lwd=1)
+    lines(data_typical$fractile, data_typical$Q_T, lty=1, lwd=2)
     points(data_typical$fractile, data_typical$Q_T, pch=19)
     
     axis(side=1, at=seq(0.1, 0.9, 0.1), labels=seq(0.1, 0.9, 0.1))
     axis(side=2, las=1)
     
-    legend(x="topleft", inset=0, legend=c(expression(y[1]^{E}), expression(y[1]^{T}), expression(y[1]^{F})), lty=c(1,1,2), lwd=c(1,1,1), pch=c(4,19,8), x.intersp=1.5, y.intersp=1.5, cex=1.2)
+    legend(x="topleft", inset=0, legend=c(expression(y[1]^{E}), expression(y[1]^{T}), expression(y[1]^{F})), lty=c(1,1,1), lwd=c(1,2,1), pch=c(4,19,8), col=c("grey10", "black", "grey10"), x.intersp=1.5, y.intersp=1.5, cex=1.2)
  
 dev.off()
 
@@ -97,33 +97,35 @@ pdf('Figure-Inventory-ServiceLevel.pdf', width = 8, height = 8)
     #polygon(xx_E, yy_E, col="grey90", border=NA)
     #polygon(xx_T, yy_T, col="grey80", border=NA)
 
-    #mean of E model
-    lines(ServiceLevel_agg$fractile, ServiceLevel_agg$Gap_E_mean, lty=1, lwd=1)
-    points(ServiceLevel_agg$fractile, ServiceLevel_agg$Gap_E_mean, pch=4)
-    
-    #mean T model
-    lines(ServiceLevel_agg$fractile, ServiceLevel_agg$Gap_T_mean, lty=1, lwd=1)
-    points(ServiceLevel_agg$fractile, ServiceLevel_agg$Gap_T_mean, pch=19)
-    
     #90% quantilie of E model
-    lines(ServiceLevel_agg$fractile, ServiceLevel_agg$Gap_E90, lty=2, lwd=1)
-    points(ServiceLevel_agg$fractile, ServiceLevel_agg$Gap_E90, pch=4)
+    lines(ServiceLevel_agg$fractile, ServiceLevel_agg$Gap_E90, lty=3, lwd=1, col="grey10")
+    points(ServiceLevel_agg$fractile, ServiceLevel_agg$Gap_E90, pch=4, col="grey50")
     
     #90% quantilie of T model
-    lines(ServiceLevel_agg$fractile, ServiceLevel_agg$Gap_T90, lty=2, lwd=1)
-    points(ServiceLevel_agg$fractile, ServiceLevel_agg$Gap_T90, pch=19)
+    lines(ServiceLevel_agg$fractile, ServiceLevel_agg$Gap_T90, lty=3, lwd=1, col="grey10")
+    points(ServiceLevel_agg$fractile, ServiceLevel_agg$Gap_T90, pch=19, col="grey50")
+        
+    #mean of E model
+    lines(ServiceLevel_agg$fractile, ServiceLevel_agg$Gap_E_mean, lty=1, lwd=1, col="grey10")
+    points(ServiceLevel_agg$fractile, ServiceLevel_agg$Gap_E_mean, pch=4, col="grey10")
+    
+    #mean T model
+    lines(ServiceLevel_agg$fractile, ServiceLevel_agg$Gap_T_mean, lty=1, lwd=2)
+    points(ServiceLevel_agg$fractile, ServiceLevel_agg$Gap_T_mean, pch=19)
+    
     
     axis(side=1, at=seq(0.1, 0.9, 0.1), labels=seq(0.1, 0.9, 0.1))
     axis(side=2, las=1)
 
     legend(x="topright", inset=0,
-        legend=c(expression(paste("mean of ", delta^E, sep="")), 
+       legend=c(expression(paste("mean of ", delta^E, sep="")), 
                 expression(paste("mean of ", delta^T, sep="")), 
                 expression(paste("90% quantile of ", delta^E, sep="")),  
                 expression(paste("90% quantile of ", delta^T, sep=""))),  
-        lty=c(1,1,2,2), lwd=c(1,1,1,1), pch=c(4,19,4,19),
-        #fill=c(NA, NA, "grey90", "gray80"), border=c(NA, NA, NA, NA), 
-        x.intersp=1.5, y.intersp=1.5, cex=1.2)
+       lty=c(1,1,3,3), lwd=c(1,2,1,1), pch=c(4,19,4,19), col=c("grey10", "black", "grey50", "grey50"), 
+       #fill=c(NA, NA, "grey90", "gray80"), border=c(NA, NA, NA, NA), 
+       x.intersp=1.5, y.intersp=1.5, cex=1.2)
+    
 
 dev.off()
 
