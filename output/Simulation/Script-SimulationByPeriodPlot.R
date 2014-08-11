@@ -9,7 +9,7 @@
 setwd("~/Dropbox/Research/CensoredDemand/NVLearning.git/output/Simulation")
 
 
-simu <- read.table("NVLearning-Simulation.1.625.txt", header=TRUE)
+simu <- read.table("byPeriod/NVLearning-Simulation.byPeriod.l10.b0.0625.c1.txt", header=TRUE)
 head(simu)
 
 
