@@ -2,7 +2,7 @@
 // Name        : NVLearning_Simulation.cpp
 // Author      : Tong WANG
 // Email       : tong.wang@nus.edu.sg
-// Version     : v1.0 (2014-04-16)
+// Version     : v2.0 (2014-05-17)
 // Copyright   : ...
 // Description : simulation for comparing models:
 //                  P Model with known demand distribution
@@ -30,13 +30,15 @@
 
 #include <omp.h>
 
+#include <boost/program_options.hpp>
+namespace po = boost::program_options;
 
 using namespace std;
 
 //***********************************************************
 
-#define N 101                                                        //number of periods
-#define RUN 1000000                                                  //number of simulation runs
+#define N 101                                                       //number of periods
+#define RUN 1000000                                                 //number of simulation runs
 
 #define D_MAX 1000
 #define D_UP_NUMBER_OF_STDEV_AWAY_FROM_THE_MEAN 10                  //upper bound for D
@@ -50,11 +52,26 @@ using namespace std;
 //***********************************************************
 
 double price, cost;                                                 //Newsvendor price and cost parameters
-double alpha0, beta0;                                               //Initial prior of lambda is Gamma(alpha0, beta0)
+double alpha0, beta0, lambda_mean;                                  //Initial prior of lambda is Gamma(alpha0, beta0)
 
 ofstream file;                                                      //output files
+bool statbyperiod;                                                  //whether to output stats by period
+
+auto startTime = chrono::system_clock::now();                       //time point of starting calculation
+auto endTime = chrono::system_clock::now();                         //time point of finishing calculation
 
 //***********************************************************
+string dbl_to_str(const double& f)
+{
+    
+    string str = to_string (f);
+    
+    str.erase ( str.find_last_not_of('0') + 1, std::string::npos );
+    
+    if (str.back() == '.') str.pop_back();
+    
+    return str;
+}
 
 //Functions for calculating various probability distributions
 
@@ -343,290 +360,379 @@ int find_yE(const int& cumulativeTime, const int& cumulativeQuantity, const mult
 
 int main(int ac, char* av[])
 {
+    //read and parse command line inputs (using boose::program_options)
+    po::options_description desc("Allowed options");
+    desc.add_options()
+    ("help,h", "produce help message")
+    //scenario parameters
+    ("lambda,l", po::value<double>(&lambda_mean)->default_value(10), "mean demand (E[lambda])")
+    ("beta,b", po::value<double>(&beta0)->default_value(1), "beta")
+    ("cost,c", po::value<double>(&cost)->default_value(1), "unit cost")
+    //file names input
+    ("statbyperiod,s", po::value<bool>(&statbyperiod)->default_value(0), "whether to output stats by period")
+    ;
+    
+    po::variables_map vm;
+    po::store(po::parse_command_line(ac, av, desc), vm);
+    po::notify(vm);
+    
+    
+    if (vm.count("help")) {
+        cout << "Usage: options_description [options]\n";
+        cout << desc;
+        return 0;
+    }
+
     
     //initialize cost parameters
     price = 2;
-    cost = 1.5;
+    cost = 2;
     
     //initial prior parameters
-    alpha0 = 0.625;
-    beta0 = 0.0625;
+    //lambda_mean = 10;
+    //beta0 = 0.0625;
     
     
     
+    string filename = "NVLearning-Simulation.l" + dbl_to_str(lambda_mean) +".b" + dbl_to_str(beta0) + ".c" + dbl_to_str(cost) + ".txt";
+
     //Open output file
-    file.open("NVLearning-Simulation.15.625.txt", fstream::app|fstream::out);
+    file.open(filename, fstream::app|fstream::out);
     
     if (! file)
     {
         //if fail to open the file
-        cerr << "can't open output file NVLearning_Full_result.txt!" << endl;
+        cerr << "can't open output file NVLearning_Simulation.txt!" << endl;
         exit(EXIT_FAILURE);
     }
 	
     file << setprecision(10);
     cout << setprecision(10);
 
-    cout << "Price\tCost\talpha0\tbeta0" << endl;
-    cout << price << "\t" << cost << "\t" << alpha0 << "\t" << beta0 << endl;
-    
-    
-    
-    //======================
-    //start simulation
-    //======================
-    
-    
-    // Initialize random number generator.
-    random_device rd;                                           //defind random device
-    knuth_b re(12345);                                          //define a knuth_b random engine with a fixed seed
-    gamma_distribution<> rgamma(alpha0, 1/beta0);               //initialize a Gamma(alpha0, beta0) distribution (for simulating lambda)
-    
-    
-    // prepare vectors storing simulation results
-    vector<vector<double>> profitP(RUN, vector<double>(N));     // profit[run][period]
-    vector<vector<double>> profitF(RUN, vector<double>(N));
-    vector<vector<double>> profitT(RUN, vector<double>(N));
-    vector<vector<double>> profitE(RUN, vector<double>(N));
-    vector<int> inventoryP(RUN);                                // inventoryP[run] --- inventory in P model does not change over time
-    vector<vector<int>> inventoryF(RUN, vector<int>(N));        // inventory[run][period]
-    vector<vector<int>> inventoryT(RUN, vector<int>(N));
-    vector<vector<int>> inventoryE(RUN, vector<int>(N));
-    
-    
-    cout << "Starting simulation runs ..." << endl;
-    
-    
-    //the big RUN loop, r = 0, ..., RUN-1
-#pragma omp parallel for schedule(static) shared(profitP, profitF, profitT, profitE, inventoryP, inventoryF, inventoryT, inventoryE)
-    for (unsigned int r=0; r<RUN; ++r)
+    cout << "N\tr\tc\talpha\tbeta\tPi_Em\tPi_Tm\tPi_F\tPi_P\tRun_Time" << endl;
+    file << "N\tr\tc\talpha\tbeta\tPi_Em\tPi_Tm\tPi_F\tPi_P\tRun_Time" << endl;
+
+    //for (lambda_mean=10; lambda_mean<=50; lambda_mean+=10)
+    //for (beta0=2; beta0>=0.05; beta0/=2)
     {
-        //in each run, first simulate a lambda_true from the Gamma(alpha0, beta0) distribution
-        double lambda_true = rgamma(re);
+        alpha0 = beta0*lambda_mean;
         
-        //initialize an Exp(lambda_true) distribution for simulating inter-arrival times
-        exponential_distribution<> rexp(lambda_true);
-        
-        
-        if (r % 100 == 0)
-            cout << "Run " << r << " ... (lambda = " << lambda_true << ") " << endl;
-        
-        
-        //observation state of the F, T, and E models
-        double cumQuantityF = 0;
-        double cumTimeF = 0;
-        double cumQuantityT = 0;
-        double cumTimeT = 0;
-        double cumQuantityE = 0;
-        double cumTimeE = 0;
-        multiset<int> censoredObservationsE;
-        
-        
-        //solve the newsvendor quantity when lambda_true is known (this remains the same across all the periods, so just keep one copy)
-        int yP = find_yP(lambda_true);
-        inventoryP[r] = yP;
-        
-        
-        //loop over all the periods n = 0, ..., N-1
-        for (unsigned int n=0; n<N; ++n)
+        //for (cost=0.2; cost<=1.85; cost+=0.1)
         {
-            //***********************************************************
-            //in each period, first simulate demand arrivals and store arrival times in the vector
-            double demandInPeriod;
-            vector<double> arrivalsInPeriod(D_MAX);
-            arrivalsInPeriod[0] = 0;
+            cout << N << "\t" << price << "\t" << cost << "\t" << alpha0 << "\t" << beta0 << "\t";
+            file << N << "\t" << price << "\t" << cost << "\t" << alpha0 << "\t" << beta0 << "\t";
+    
+    
+    
+            //======================
+            //start simulation
+            //======================
+            startTime = chrono::system_clock::now();
             
             
-            //simulate arrivals one by one
-            for (unsigned int i=1;; ++i) {
+            // Initialize random number generator.
+            random_device rd;                                           //defind random device
+            knuth_b re(12345);                                          //define a knuth_b random engine with a fixed seed
+            gamma_distribution<> rgamma(alpha0, 1/beta0);               //initialize a Gamma(alpha0, beta0) distribution (for simulating lambda)
+            
+            
+            // prepare vectors storing simulation results
+            vector<vector<double>> profitP(RUN, vector<double>(N));     // profit[run][period]
+            vector<vector<double>> profitF(RUN, vector<double>(N));
+            vector<vector<double>> profitT(RUN, vector<double>(N));
+            vector<vector<double>> profitE(RUN, vector<double>(N));
+            vector<int> inventoryP(RUN);                                // inventoryP[run] --- inventory in P model does not change over time
+            vector<vector<int>> inventoryF(RUN, vector<int>(N));        // inventory[run][period]
+            vector<vector<int>> inventoryT(RUN, vector<int>(N));
+            vector<vector<int>> inventoryE(RUN, vector<int>(N));
+            
+            
+            
+            //the big RUN loop, r = 0, ..., RUN-1
+            #pragma omp parallel for schedule(static) shared(profitP, profitF, profitT, profitE, inventoryP, inventoryF, inventoryT, inventoryE)
+            for (unsigned int r=0; r<RUN; ++r)
+            {
+                //in each run, first simulate a lambda_true from the Gamma(alpha0, beta0) distribution
+                double lambda_true = rgamma(re);
                 
-                double tau = rexp(re);  //inter-arrival time follows Exp(lambda_true)
-                arrivalsInPeriod[i] = arrivalsInPeriod[i-1] + tau;
+                //initialize an Exp(lambda_true) distribution for simulating inter-arrival times
+                exponential_distribution<> rexp(lambda_true);
                 
                 
-                if (arrivalsInPeriod[i] > 1) //stop simulation once time reaches 1
+                if (r % 10000 == 0)
+                    cout << "Run " << r << " ... (lambda = " << lambda_true << ") " << endl;
+                
+                
+                //observation state of the F, T, and E models
+                double cumQuantityF = 0;
+                double cumTimeF = 0;
+                double cumQuantityT = 0;
+                double cumTimeT = 0;
+                double cumQuantityE = 0;
+                double cumTimeE = 0;
+                multiset<int> censoredObservationsE;
+                
+                
+                //solve the newsvendor quantity when lambda_true is known (this remains the same across all the periods, so just keep one copy)
+                int yP = find_yP(lambda_true);
+                inventoryP[r] = yP;
+                
+                
+                //loop over all the periods n = 0, ..., N-1
+                for (unsigned int n=0; n<N; ++n)
                 {
-                    // demand is the number of occurrances within time interval (0, 1]
-                    demandInPeriod = i-1;
-                    break;
+                    //***********************************************************
+                    //in each period, first simulate demand arrivals and store arrival times in the vector
+                    double demandInPeriod;
+                    vector<double> arrivalsInPeriod(D_MAX);
+                    arrivalsInPeriod[0] = 0;
+                    
+                    
+                    //simulate arrivals one by one
+                    for (unsigned int i=1;; ++i) {
+                        
+                        double tau = rexp(re);  //inter-arrival time follows Exp(lambda_true)
+                        arrivalsInPeriod[i] = arrivalsInPeriod[i-1] + tau;
+                        
+                        
+                        if (arrivalsInPeriod[i] > 1) //stop simulation once time reaches 1
+                        {
+                            // demand is the number of occurrances within time interval (0, 1]
+                            demandInPeriod = i-1;
+                            break;
+                        }
+                    }
+                    
+                    
+                    //***********************************************************
+                    //Evaluate each model, and save the inventory decision and final profit
+                    
+                    //[P Model] just calculate profit
+                    profitP[r][n] = pi(yP, demandInPeriod);
+                    
+                    
+                    //[F Model]
+                    //find inventory with current belief
+                    int yF = find_yF(cumTimeF, cumQuantityF);
+                    inventoryF[r][n] = yF;
+                    
+                    //calculate and save profit
+                    profitF[r][n] = pi(yF, demandInPeriod);
+                    
+                    //update new observation
+                    cumQuantityF += demandInPeriod;
+                    cumTimeF++;
+                    
+                    
+                    //[T Model]
+                    //find the myopic inventory level
+                    int yT = find_yF(cumTimeT, cumQuantityT);
+                    inventoryT[r][n] = yT;
+                    
+                    //calculate and save profit
+                    profitT[r][n] = pi(yT, demandInPeriod);
+                    
+                    //update new observation
+                    if (yT > demandInPeriod)
+                    {
+                        cumQuantityT += demandInPeriod;             //if not censored, update like in the F model
+                        cumTimeT++;
+                    } else {
+                        cumQuantityT += yT;                         //if censored, update using stock-out timing
+                        cumTimeT += arrivalsInPeriod[yT];
+                    }
+                    
+                    
+                    //[E Model]
+                    //find the myopic inventory level
+                    int yE = find_yE(cumTimeE, cumQuantityE, censoredObservationsE);
+                    inventoryE[r][n] = yE;
+                    
+                    //calculate and save profit
+                    profitE[r][n] = pi(yE, demandInPeriod);
+                    
+                    //update new observation
+                    if (yE > demandInPeriod)
+                    {
+                        cumQuantityE += demandInPeriod;             //if not censored, update like in the F model
+                        cumTimeE++;
+                    } else {
+                        censoredObservationsE.insert(yE);           //if censored, add a censoring event (D>=yE)
+                    }
+                    
+
+                    
+                
+                } // end for n
+                
+            } // end for r
+            
+
+            endTime = chrono::system_clock::now();
+
+
+
+            //add up to the total
+            double totalProfitP = 0;
+            double totalProfitF = 0;
+            double totalProfitT = 0;
+            double totalProfitE = 0;
+
+            for (unsigned int r=0; r<RUN; ++r)
+                for (unsigned int n=0; n<N; ++n)
+                {
+                    totalProfitP += profitP[r][n];
+                    totalProfitF += profitF[r][n];
+                    totalProfitT += profitT[r][n];
+                    totalProfitE += profitE[r][n];
                 }
-            }
+
+            //average for total profit
+            totalProfitP /= RUN;
+            totalProfitF /= RUN;
+            totalProfitT /= RUN;
+            totalProfitE /= RUN;
+
             
             
-            //***********************************************************
-            //Evaluate each model, and save the inventory decision and final profit
-            
-            //[P Model] just calculate profit
-            profitP[r][n] = pi(yP, demandInPeriod);
+            cout << totalProfitE << "\t" << totalProfitT << "\t" << totalProfitF << "\t" << totalProfitP << "\t" <<  chrono::duration_cast<chrono::milliseconds> (endTime-startTime).count() << endl;
+            file << totalProfitE << "\t" << totalProfitT << "\t" << totalProfitF << "\t" << totalProfitP << "\t" <<  chrono::duration_cast<chrono::milliseconds> (endTime-startTime).count() << endl;
             
             
-            //[F Model]
-            //find inventory with current belief
-            int yF = find_yF(cumTimeF, cumQuantityF);
-            inventoryF[r][n] = yF;
-            
-            //calculate and save profit
-            profitF[r][n] = pi(yF, demandInPeriod);
-            
-            //update new observation
-            cumQuantityF += demandInPeriod;
-            cumTimeF++;
-            
-            
-            //[T Model]
-            //find the myopic inventory level
-            int yT = find_yF(cumTimeT, cumQuantityT);
-            inventoryT[r][n] = yT;
-            
-            //calculate and save profit
-            profitT[r][n] = pi(yT, demandInPeriod);
-            
-            //update new observation
-            if (yT > demandInPeriod)
+            if (statbyperiod)
             {
-                cumQuantityT += demandInPeriod;             //if not censored, update like in the F model
-                cumTimeT++;
-            } else {
-                cumQuantityT += yT;                         //if censored, update using stock-out timing
-                cumTimeT += arrivalsInPeriod[yT];
-            }
+                ofstream file2;
+
+                //try load archived data into v_map
+                string file2name = "NVLearning-Simulation.byPeriod.l" + dbl_to_str(lambda_mean) +".b" + dbl_to_str(beta0) + ".c" + dbl_to_str(cost) + ".txt";
+
+                //Open output file
+                file2.open(file2name, fstream::app|fstream::out);
+                
+                if (! file2)
+                {
+                    //if fail to open the file
+                    cerr << "can't open output file " << file2name << "!" << endl;
+                    exit(EXIT_FAILURE);
+                }
+                
+                file2 << setprecision(10);
+
+                
+                //statistics of the simulation results by period
+                file2 << "n\tavgPP\tavgPF\tavgPT\tavgPE\tsdPP\tsdPF\tsdPT\tsdPE\tavgIP\tavgIF\tavgIT\tavgIE\tsdIP\tsdIF\tsdIT\tsdIE" << endl;
+                
+                
+                //vectors for mean and stdev of Profit
+                vector<double> avgProfitPByPeriod(N);
+                vector<double> avgProfitFByPeriod(N);
+                vector<double> avgProfitTByPeriod(N);
+                vector<double> avgProfitEByPeriod(N);
+                vector<double> sdProfitPByPeriod(N);
+                vector<double> sdProfitFByPeriod(N);
+                vector<double> sdProfitTByPeriod(N);
+                vector<double> sdProfitEByPeriod(N);
+                
+                //vectors for mean and stdev of Inventory
+                vector<double> avgInventoryPByPeriod(N);
+                vector<double> avgInventoryFByPeriod(N);
+                vector<double> avgInventoryTByPeriod(N);
+                vector<double> avgInventoryEByPeriod(N);
+                vector<double> sdInventoryPByPeriod(N);
+                vector<double> sdInventoryFByPeriod(N);
+                vector<double> sdInventoryTByPeriod(N);
+                vector<double> sdInventoryEByPeriod(N);
+                
+                
+                //run stat for each period
+                for (unsigned int n=0; n<N; ++n)
+                {
+                    double sumPP = 0;
+                    double sumPF = 0;
+                    double sumPT = 0;
+                    double sumPE = 0;
+                    
+                    double sqrsumPP = 0;
+                    double sqrsumPF = 0;
+                    double sqrsumPT = 0;
+                    double sqrsumPE = 0;
+                    
+                    double sumIP = 0;
+                    double sumIF = 0;
+                    double sumIT = 0;
+                    double sumIE = 0;
+                    
+                    double sqrsumIP = 0;
+                    double sqrsumIF = 0;
+                    double sqrsumIT = 0;
+                    double sqrsumIE = 0;
+                    
+                    for (unsigned int r=0; r<RUN; ++r)
+                    {
+                        //sum of profits of all the runs
+                        sumPP += profitP[r][n];
+                        sumPF += profitF[r][n];
+                        sumPT += profitT[r][n];
+                        sumPE += profitE[r][n];
+                        
+                        //sum of squared profits of all the runs
+                        sqrsumPP += pow(profitP[r][n], 2.0);
+                        sqrsumPF += pow(profitF[r][n], 2.0);
+                        sqrsumPT += pow(profitT[r][n], 2.0);
+                        sqrsumPE += pow(profitE[r][n], 2.0);
+                        
+                        //sum of inventory of all the runs
+                        sumIP += inventoryP[r];
+                        sumIF += inventoryF[r][n];
+                        sumIT += inventoryT[r][n];
+                        sumIE += inventoryE[r][n];
+                        
+                        //sum of squared inventory of all the runs
+                        sqrsumIP += pow(inventoryP[r], 2.0);
+                        sqrsumIF += pow(inventoryF[r][n], 2.0);
+                        sqrsumIT += pow(inventoryT[r][n], 2.0);
+                        sqrsumIE += pow(inventoryE[r][n], 2.0);
+                    } // end for r
+                    
+                    //mean profits
+                    avgProfitPByPeriod[n] = sumPP/RUN;
+                    avgProfitFByPeriod[n] = sumPF/RUN;
+                    avgProfitTByPeriod[n] = sumPT/RUN;
+                    avgProfitEByPeriod[n] = sumPE/RUN;
+                    
+                    //95% conficendence range of the mean profit
+                    sdProfitPByPeriod[n] = 1.96 * sqrt((sqrsumPP/RUN - pow(avgProfitPByPeriod[n], 2.0))/(RUN-1));
+                    sdProfitFByPeriod[n] = 1.96 * sqrt((sqrsumPF/RUN - pow(avgProfitFByPeriod[n], 2.0))/(RUN-1));
+                    sdProfitTByPeriod[n] = 1.96 * sqrt((sqrsumPT/RUN - pow(avgProfitTByPeriod[n], 2.0))/(RUN-1));
+                    sdProfitEByPeriod[n] = 1.96 * sqrt((sqrsumPE/RUN - pow(avgProfitEByPeriod[n], 2.0))/(RUN-1));
+                    
+                    //mean inventory
+                    avgInventoryPByPeriod[n] = sumIP/RUN;
+                    avgInventoryFByPeriod[n] = sumIF/RUN;
+                    avgInventoryTByPeriod[n] = sumIT/RUN;
+                    avgInventoryEByPeriod[n] = sumIE/RUN;
+                    
+                    //95% conficendence range of the mean inventory
+                    sdInventoryPByPeriod[n] = 1.96 * sqrt((sqrsumIP/RUN - pow(avgInventoryPByPeriod[n], 2.0))/(RUN-1));
+                    sdInventoryFByPeriod[n] = 1.96 * sqrt((sqrsumIF/RUN - pow(avgInventoryFByPeriod[n], 2.0))/(RUN-1));
+                    sdInventoryTByPeriod[n] = 1.96 * sqrt((sqrsumIT/RUN - pow(avgInventoryTByPeriod[n], 2.0))/(RUN-1));
+                    sdInventoryEByPeriod[n] = 1.96 * sqrt((sqrsumIE/RUN - pow(avgInventoryEByPeriod[n], 2.0))/(RUN-1));
+                    
+                    
+                    //output the means and confidence intervals
+                    file2 << n << "\t" << avgProfitPByPeriod[n] << "\t" << avgProfitFByPeriod[n] << "\t" << avgProfitTByPeriod[n] << "\t" << avgProfitEByPeriod[n] << "\t" << sdProfitPByPeriod[n] << "\t" << sdProfitFByPeriod[n] << "\t" << sdProfitTByPeriod[n] << "\t" << sdProfitEByPeriod[n] << "\t" << avgInventoryPByPeriod[n] << "\t" << avgInventoryFByPeriod[n] << "\t" << avgInventoryTByPeriod[n] << "\t" << avgInventoryEByPeriod[n] << "\t" << sdInventoryPByPeriod[n] << "\t" << sdInventoryFByPeriod[n] << "\t" << sdInventoryTByPeriod[n] << "\t" << sdInventoryEByPeriod[n]<< endl;
+
+                } // end for n
+
+                file2.close();
+            } // end if statbyperiod
             
             
-            //[E Model]
-            //find the myopic inventory level
-            int yE = find_yE(cumTimeE, cumQuantityE, censoredObservationsE);
-            inventoryE[r][n] = yE;
-            
-            //calculate and save profit
-            profitE[r][n] = pi(yE, demandInPeriod);
-            
-            //update new observation
-            if (yE > demandInPeriod)
-            {
-                cumQuantityE += demandInPeriod;             //if not censored, update like in the F model
-                cumTimeE++;
-            } else {
-                censoredObservationsE.insert(yE);           //if censored, add a censoring event (D>=yE)
-            }
-            
-        }
-        
-        
-        
-    }
-    
-    cout << "Simulations are done!" << endl;
+        } // end for cost
+    } // end for beta/lambda
     
     
-    
-    //statistics of the simulation results
-    
-    cout << "n\tavgPP\tavgPF\tavgPT\tavgPE\tsdPP\tsdPF\tsdPT\tsdPE\tavgIP\tavgIF\tavgIT\tavgIE\tsdIP\tsdIF\tsdIT\tsdIE" << endl;
-    file << "n\tavgPP\tavgPF\tavgPT\tavgPE\tsdPP\tsdPF\tsdPT\tsdPE\tavgIP\tavgIF\tavgIT\tavgIE\tsdIP\tsdIF\tsdIT\tsdIE" << endl;
-    
-    
-    //vectors for mean and stdev of Profit
-    vector<double> avgProfitPByPeriod(N);
-    vector<double> avgProfitFByPeriod(N);
-    vector<double> avgProfitTByPeriod(N);
-    vector<double> avgProfitEByPeriod(N);
-    vector<double> sdProfitPByPeriod(N);
-    vector<double> sdProfitFByPeriod(N);
-    vector<double> sdProfitTByPeriod(N);
-    vector<double> sdProfitEByPeriod(N);
-    
-    //vectors for mean and stdev of Inventory
-    vector<double> avgInventoryPByPeriod(N);
-    vector<double> avgInventoryFByPeriod(N);
-    vector<double> avgInventoryTByPeriod(N);
-    vector<double> avgInventoryEByPeriod(N);
-    vector<double> sdInventoryPByPeriod(N);
-    vector<double> sdInventoryFByPeriod(N);
-    vector<double> sdInventoryTByPeriod(N);
-    vector<double> sdInventoryEByPeriod(N);
-    
-    
-    //run stat for each period
-    for (unsigned int n=0; n<N; ++n)
-    {
-        double sumPP = 0;
-        double sumPF = 0;
-        double sumPT = 0;
-        double sumPE = 0;
-        
-        double sqrsumPP = 0;
-        double sqrsumPF = 0;
-        double sqrsumPT = 0;
-        double sqrsumPE = 0;
-        
-        double sumIP = 0;
-        double sumIF = 0;
-        double sumIT = 0;
-        double sumIE = 0;
-        
-        double sqrsumIP = 0;
-        double sqrsumIF = 0;
-        double sqrsumIT = 0;
-        double sqrsumIE = 0;
-        
-        for (unsigned int r=0; r<RUN; ++r)
-        {
-            //sum of profits of all the runs
-            sumPP += profitP[r][n];
-            sumPF += profitF[r][n];
-            sumPT += profitT[r][n];
-            sumPE += profitE[r][n];
-            
-            //sum of squared profits of all the runs
-            sqrsumPP += pow(profitP[r][n], 2.0);
-            sqrsumPF += pow(profitF[r][n], 2.0);
-            sqrsumPT += pow(profitT[r][n], 2.0);
-            sqrsumPE += pow(profitE[r][n], 2.0);
-            
-            //sum of inventory of all the runs
-            sumIP += inventoryP[r];
-            sumIF += inventoryF[r][n];
-            sumIT += inventoryT[r][n];
-            sumIE += inventoryE[r][n];
-            
-            //sum of squared inventory of all the runs
-            sqrsumIP += pow(inventoryP[r], 2.0);
-            sqrsumIF += pow(inventoryF[r][n], 2.0);
-            sqrsumIT += pow(inventoryT[r][n], 2.0);
-            sqrsumIE += pow(inventoryE[r][n], 2.0);
-        }
-        
-        //mean profits
-        avgProfitPByPeriod[n] = sumPP/RUN;
-        avgProfitFByPeriod[n] = sumPF/RUN;
-        avgProfitTByPeriod[n] = sumPT/RUN;
-        avgProfitEByPeriod[n] = sumPE/RUN;
-        
-        //95% conficendence range of the mean profit
-        sdProfitPByPeriod[n] = 1.96 * sqrt((sqrsumPP/RUN - pow(avgProfitPByPeriod[n], 2.0))/(RUN-1));
-        sdProfitFByPeriod[n] = 1.96 * sqrt((sqrsumPF/RUN - pow(avgProfitFByPeriod[n], 2.0))/(RUN-1));
-        sdProfitTByPeriod[n] = 1.96 * sqrt((sqrsumPT/RUN - pow(avgProfitTByPeriod[n], 2.0))/(RUN-1));
-        sdProfitEByPeriod[n] = 1.96 * sqrt((sqrsumPE/RUN - pow(avgProfitEByPeriod[n], 2.0))/(RUN-1));
-        
-        //mean inventory
-        avgInventoryPByPeriod[n] = sumIP/RUN;
-        avgInventoryFByPeriod[n] = sumIF/RUN;
-        avgInventoryTByPeriod[n] = sumIT/RUN;
-        avgInventoryEByPeriod[n] = sumIE/RUN;
-        
-        //95% conficendence range of the mean inventory
-        sdInventoryPByPeriod[n] = 1.96 * sqrt((sqrsumIP/RUN - pow(avgInventoryPByPeriod[n], 2.0))/(RUN-1));
-        sdInventoryFByPeriod[n] = 1.96 * sqrt((sqrsumIF/RUN - pow(avgInventoryFByPeriod[n], 2.0))/(RUN-1));
-        sdInventoryTByPeriod[n] = 1.96 * sqrt((sqrsumIT/RUN - pow(avgInventoryTByPeriod[n], 2.0))/(RUN-1));
-        sdInventoryEByPeriod[n] = 1.96 * sqrt((sqrsumIE/RUN - pow(avgInventoryEByPeriod[n], 2.0))/(RUN-1));
-        
-        
-        //output the means and confidence intervals
-        cout << n << "\t" << avgProfitPByPeriod[n] << "\t" << avgProfitFByPeriod[n] << "\t" << avgProfitTByPeriod[n] << "\t" << avgProfitEByPeriod[n] << "\t" << sdProfitPByPeriod[n] << "\t" << sdProfitFByPeriod[n] << "\t" << sdProfitTByPeriod[n] << "\t" << sdProfitEByPeriod[n] << "\t" << avgInventoryPByPeriod[n] << "\t" << avgInventoryFByPeriod[n] << "\t" << avgInventoryTByPeriod[n] << "\t" << avgInventoryEByPeriod[n] << "\t" << sdInventoryPByPeriod[n] << "\t" << sdInventoryFByPeriod[n] << "\t" << sdInventoryTByPeriod[n] << "\t" << sdInventoryEByPeriod[n]<< endl;
-        file << n << "\t" << avgProfitPByPeriod[n] << "\t" << avgProfitFByPeriod[n] << "\t" << avgProfitTByPeriod[n] << "\t" << avgProfitEByPeriod[n] << "\t" << sdProfitPByPeriod[n] << "\t" << sdProfitFByPeriod[n] << "\t" << sdProfitTByPeriod[n] << "\t" << sdProfitEByPeriod[n] << "\t" << avgInventoryPByPeriod[n] << "\t" << avgInventoryFByPeriod[n] << "\t" << avgInventoryTByPeriod[n] << "\t" << avgInventoryEByPeriod[n] << "\t" << sdInventoryPByPeriod[n] << "\t" << sdInventoryFByPeriod[n] << "\t" << sdInventoryTByPeriod[n] << "\t" << sdInventoryEByPeriod[n]<< endl;
-    }
-    
-    
+    file.close();
     
     
     return 0;
