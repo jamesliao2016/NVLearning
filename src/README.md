@@ -3,15 +3,15 @@ Description
 
 There are five *.cpp* files corresponding to five models considered in the paper:
 
-	NVLearning_Full.cpp			<==> The model with full observation of all demand occurrences (F)
-	NVLearning_Event.cpp		<==> The model with observation of sales quantity and stock-out event (E)
-	NVLearning_Timing.cpp		<==> The model with observation of sales occurrences (T)
-	NVLearning_CheckpointA.cpp	<==> The model with inventory checkpoints (IC)
-	NVLearning_CheckpointB.cpp	<==> The model with stock-out checkpoints (SC)
+	NVLearning_Full.cpp			==> The model with full observation of all demand occurrences (F)
+	NVLearning_Event.cpp		==> The model with observation of sales quantity and stock-out event (E)
+	NVLearning_Timing.cpp		==> The model with observation of sales occurrences (T)
+	NVLearning_CheckpointA.cpp	==> The model with inventory checkpoints (IC)
+	NVLearning_CheckpointB.cpp	==> The model with stock-out checkpoints (SC)
 
 Each file implements the dynamic programming algorithm in finding the optimal inventory level and evaluating expected profit.
 
-The file *NVLearning_Simulation.cpp* is for the simulation study of myopic polices in Section 5.3 of the paper.
+	NVLearning_Simulation.cpp 	==> The simulation study of myopic polices in Section 5.3 of the paper
 
 The two *.h* header files are required when compiling the *.cpp* files.
 
